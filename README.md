@@ -16,6 +16,13 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - Admin **Calendar**: a month view (working/closed days, free-slot counts, dots for blocks and bookings) and a day view (working hours for that weekday, existing blocks with delete, a form to block specific times or the whole day, and a live "free slots" preview using the exact same engine the booking page will use)
 - `scripts/smoke-availability.ts` — an optional dev-only script that runs the engine against a real local Postgres database to sanity-check it end to end. Needs `pg` and `tsx` (already in devDependencies) and a local Postgres server; not needed for normal use or deployment.
 
+## Phase 3 — done
+- The real customer booking page at **`/book`**, linked from the homepage's "Check availability" button. Six steps — Shoot, Duration, Date & Time, Location, Details, Review — all driven by live data: your real prices via `calculatePrice`, real open slots via the Phase 2 availability API, real locations and areas.
+- **Payment isn't live yet (that's Phase 4), so "Review" ends in a WhatsApp handoff instead of a dead end**: the button sends you a pre-filled WhatsApp message with everything — shoot, date, time, location, full price breakdown, customer name and Instagram — so a customer can complete the whole flow today and you get a ready-to-answer message instead of a vague DM. Nothing is written to the database at this step; that starts in Phase 4 once payment exists to pair it with.
+- A zone needing a custom quote (like "Outside Kolkata") shows its own WhatsApp button instead of a price, and blocks the online-booking button.
+- `lib/whatsapp.ts` — builds that message and the `wa.me` link, 4 tests.
+- 37 tests passing across pricing, availability and WhatsApp; full production build clean.
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
@@ -63,8 +70,7 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-3. Customer booking flow (7 steps, mobile-first, sticky price) — wires the real booking page up to the availability engine and pricing engine built so far
-4. Slot holds + Razorpay + webhooks + confirmation
+4. Slot holds + Razorpay + webhooks + confirmation + conflict handling — this is where "Review" starts actually reserving the slot and taking payment
 5. Email + Telegram notifications, reminders, calendar invites
 6. Booking management: extra charges, balance links, reschedule / cancel / refund, dashboard numbers
 7. Landing page, policy pages, launch
