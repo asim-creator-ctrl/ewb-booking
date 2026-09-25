@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import {
   addDaysStr, formatLocalDateLong, formatLocalTime, getAvailableSlotsForDate, zonedTimeToUtc,
 } from "@/lib/availability";
+import { sweepExpiredHolds } from "@/lib/bookings";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Field, Flash, PageHead, Row, Section } from "@/components/ui";
 import { addBlock, blockWholeDay, deleteBlock } from "../../actions";
@@ -28,6 +29,7 @@ export default async function DayPage({
   const previewDuration = PREVIEW_DURATIONS.includes(Number(durationParam)) ? Number(durationParam) : 60;
 
   const { supabase } = await requireAdmin();
+  await sweepExpiredHolds(supabase);
   const { data: settings } = await supabase.from("settings").select("*").eq("id", 1).single();
   const tz = settings!.timezone;
   const weekday = new Date(date + "T00:00:00Z").getUTCDay();

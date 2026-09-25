@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { addDaysStr, summarizeRange, zonedTimeToUtc, type RangeRow } from "@/lib/availability";
+import { sweepExpiredHolds } from "@/lib/bookings";
 import { PageHead } from "@/components/ui";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -40,6 +41,7 @@ function markDots(map: Map<string, number>, rows: RangeRow[], tz: string) {
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const { supabase } = await requireAdmin();
+  await sweepExpiredHolds(supabase);
   const { month: monthParam } = await searchParams;
   const now = new Date();
   const [year, month] = (monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}`)

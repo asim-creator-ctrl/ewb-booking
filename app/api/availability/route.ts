@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addDaysStr, getAvailableSlotsForDate, zonedDateStr, zonedTimeToUtc } from "@/lib/availability";
+import { sweepExpiredHolds } from "@/lib/bookings";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function GET(req: Request) {
     NextResponse.json({ date, slots: [], reason }, { headers: { "Cache-Control": "no-store" } });
 
   const db = createServiceClient();
+  await sweepExpiredHolds(db);
   const { data: settings } = await db.from("settings").select("*").eq("id", 1).single();
   if (!settings) return NextResponse.json({ error: "Settings unavailable" }, { status: 500 });
   if (!settings.booking_enabled) return empty("paused");

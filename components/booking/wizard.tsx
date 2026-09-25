@@ -15,6 +15,7 @@ import {
 import { calculatePrice, formatDuration, formatINR, type Quote } from "@/lib/pricing";
 import type { BookingConfig, LocationOption, Service, ServiceDuration } from "@/lib/types";
 import { buildBookingWhatsAppMessage, whatsappLink } from "@/lib/whatsapp";
+import PaymentActions from "./PaymentActions";
 
 type Step = "shoot" | "duration" | "date" | "location" | "details" | "review";
 const STEPS: Step[] = ["shoot", "duration", "date", "location", "details", "review"];
@@ -48,7 +49,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function Wizard({ initialConfig }: { initialConfig: BookingConfig }) {
+export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: BookingConfig; razorpayConfigured: boolean }) {
   const config = initialConfig;
   const { settings } = config;
 
@@ -138,6 +139,16 @@ export function Wizard({ initialConfig }: { initialConfig: BookingConfig }) {
       })
     : "";
   const waLink = settings.whatsapp_number ? whatsappLink(settings.whatsapp_number, message) : null;
+
+  const buildHoldPayload = () => ({
+    serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
+    date: dateStr, slotStart: slot?.start, slotEnd: slot?.end, address: address || null,
+    customer: {
+      fullName: details.name, instagram: details.instagram || null, whatsapp: details.whatsapp,
+      email: details.email, purpose: details.purpose || null, referenceLink: details.referenceLink || null,
+    },
+    termsAccepted: true,
+  });
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col sm:max-w-lg">
@@ -323,7 +334,9 @@ export function Wizard({ initialConfig }: { initialConfig: BookingConfig }) {
         {step === "review" && slot && service && duration && dateStr && (
           <div className="flex flex-col gap-5">
             <p className="rounded-lg bg-safelight/10 px-3.5 py-3 text-sm leading-relaxed text-safelight">
-              This time isn&rsquo;t reserved yet — message me now to lock it in before someone else picks it.
+              {razorpayConfigured
+                ? "Your slot is held for a few minutes once you start paying — plenty of time to complete checkout."
+                : "This time isn't reserved yet — message me now to lock it in before someone else picks it."}
             </p>
             <h1 className="font-display text-3xl leading-tight">Review and send</h1>
             <div className="flex flex-col gap-1 text-sm">
@@ -364,13 +377,14 @@ export function Wizard({ initialConfig }: { initialConfig: BookingConfig }) {
             <button onClick={goNext} disabled={!canContinue[step]} className="btn btn-primary ml-auto min-w-32">Continue</button>
           </div>
         ) : (
-          waLink && (
-            <a href={terms ? waLink : undefined} aria-disabled={!terms}
-              target="_blank" rel="noopener noreferrer"
-              className={`btn btn-primary block w-full text-center ${!terms ? "pointer-events-none opacity-40" : ""}`}>
-              Message me to book — {formatINR(finalQuote.advance_paise)} advance
-            </a>
-          )
+          <PaymentActions
+            razorpayConfigured={razorpayConfigured}
+            terms={terms}
+            waLink={waLink}
+            buildHoldPayload={buildHoldPayload}
+            brandName={settings.brand_name}
+            contactEmail={details.email || undefined}
+          />
         )}
       </footer>
     </div>

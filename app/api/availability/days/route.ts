@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addDaysStr, listDates, summarizeRange, zonedTimeToUtc } from "@/lib/availability";
+import { sweepExpiredHolds } from "@/lib/bookings";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
   if (dates.length > 62) return NextResponse.json({ error: "Range too long (max 62 days)" }, { status: 400 });
 
   const db = createServiceClient();
+  await sweepExpiredHolds(db);
   const { data: settings } = await db.from("settings").select("*").eq("id", 1).single();
   if (!settings) return NextResponse.json({ error: "Settings unavailable" }, { status: 500 });
 

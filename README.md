@@ -23,11 +23,22 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - `lib/whatsapp.ts` — builds that message and the `wa.me` link, 4 tests.
 - 37 tests passing across pricing, availability and WhatsApp; full production build clean.
 
+## Phase 4 — done
+- **Real payment**: the Review step now reserves the slot and opens Razorpay Checkout for the advance, instead of only offering WhatsApp. If Razorpay's keys aren't set yet, the page automatically falls back to the Phase 3 WhatsApp button — nothing breaks either way, and switching over later needs no code change, just adding the keys.
+- `lib/bookings.ts` — `createBookingHold` re-validates the price and re-confirms the exact slot is still free (against live blocks/bookings) immediately before reserving it, then opens the Razorpay order. `confirmBookingByOrderId` is the shared confirm step called by both the browser (right after checkout) and the webhook, written to be safely idempotent — calling it twice for the same payment is a no-op, not a double-confirm.
+- **Verified against a real Postgres database**, including the two race conditions that matter most with real money on the line: a late payment for a hold that expired but nobody else took → correctly reclaimed, with a real booking reference assigned. A late payment for a hold that expired *and was taken by someone else* → correctly rejected by the database's own exclusion constraint and routed to `payment_conflict` for a manual refund, never silently overwriting the other person's booking.
+- `lib/razorpay-verify.ts` — the HMAC signature checks for both a completed Checkout payment and an incoming webhook delivery, kept in their own pure/testable file (no network calls, no secrets baked in) so the actual cryptographic logic has direct test coverage. 7 tests, including tamper detection.
+- `POST /api/bookings/hold` — reserves the slot, creates the Razorpay order.
+- `POST /api/payments/verify` — the browser calls this right after Checkout; verifies the signature, then confirms.
+- `POST /api/webhooks/razorpay` — Razorpay's own server-to-server notification; the durable path if the browser closes before verify runs. Deduplicated, so a redelivered webhook is a safe no-op.
+- Expired holds are swept (marked `expired`, freeing the slot) on every visit to the availability API and the admin calendar, so a stale hold never phantom-blocks a slot from other customers or from you.
+- 44 tests passing; full production build clean.
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
 1. Create a new project at supabase.com (region: Mumbai).
-2. **SQL Editor → New query**: paste `supabase/migrations/0001_schema.sql`, run. Then paste `supabase/seed.sql`, run.
+2. **SQL Editor → New query**: paste `supabase/migrations/0001_schema.sql`, run. Then paste `supabase/migrations/0002_phase4.sql`, run. Then paste `supabase/seed.sql`, run.
 3. **Authentication → Users → Add user**: your email, "Auto confirm" on.
 4. SQL Editor, make that account the admin:
    ```sql
@@ -37,6 +48,8 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 5. **Authentication → URL Configuration**
    - Site URL: your live URL (e.g. `https://book.editorwalabhaiya.com`)
    - Redirect URLs: add `http://localhost:3000/auth/callback` and `https://YOUR-DOMAIN/auth/callback`
+
+> **Already have this project running?** You only need to run the new file: SQL Editor → new query → paste `supabase/migrations/0002_phase4.sql` → Run. It's a small addition (one permission grant) safe to run on top of everything you already have — it doesn't touch your existing data.
 
 ### 2. GitHub → Vercel
 1. Create a new GitHub repo (e.g. `ewb-booking`) and push this folder.
@@ -48,7 +61,22 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (secret — server only) |
    | `NEXT_PUBLIC_SITE_URL` | your live URL, no trailing slash |
+   | `RAZORPAY_KEY_ID` | from Razorpay (see below) — optional, payments fall back to WhatsApp without it |
+   | `RAZORPAY_KEY_SECRET` | from Razorpay (see below) — optional, same fallback |
+   | `RAZORPAY_WEBHOOK_SECRET` | from Razorpay (see below) — optional, same fallback |
 4. Deploy. Open `/admin`, enter your email, click the link.
+
+### 3. Razorpay (Phase 4 — optional until you're ready)
+Test mode keys work immediately with no KYC, so you can try the whole payment flow today; switch to live keys later with no code change, just updating these same env vars.
+
+1. Sign up at razorpay.com (or log in if you started this earlier).
+2. **Settings → API Keys → Generate Test Key** (or Live Key, once KYC is approved). Copy the Key ID and Key Secret into Vercel as `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
+3. **Settings → Webhooks → Add New Webhook**
+   - URL: `https://YOUR-SITE/api/webhooks/razorpay`
+   - Active events: check `payment.captured` and `payment.failed`
+   - Save, then copy the webhook secret it shows you into Vercel as `RAZORPAY_WEBHOOK_SECRET`
+4. Redeploy (Vercel → Deployments → ⋯ → Redeploy) so the new env vars take effect.
+5. Test it: use Razorpay's [test card numbers](https://razorpay.com/docs/payments/payments/test-card-upi-details/) on `/book` to confirm a booking end to end without moving real money.
 
 ### Local
 ```bash
@@ -70,7 +98,6 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-4. Slot holds + Razorpay + webhooks + confirmation + conflict handling — this is where "Review" starts actually reserving the slot and taking payment
 5. Email + Telegram notifications, reminders, calendar invites
 6. Booking management: extra charges, balance links, reschedule / cancel / refund, dashboard numbers
 7. Landing page, policy pages, launch
