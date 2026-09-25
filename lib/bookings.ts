@@ -16,6 +16,7 @@ import { loadBookingConfig } from "./config";
 import { calculatePrice } from "./pricing";
 import { addDaysStr, getAvailableSlotsForDate, zonedTimeToUtc } from "./availability";
 import { createRazorpayOrder } from "./razorpay";
+import { onBookingConfirmed } from "./notifications";
 
 type Db = ReturnType<typeof createServiceClient>;
 
@@ -164,7 +165,10 @@ export async function confirmBookingByOrderId(db: Db, opts: { gatewayOrderId: st
       .eq("id", booking.id).in("status", ["held", "expired", "cancelled"])
       .select("id, ref").maybeSingle();
 
-    if (updated) return { ok: true, bookingId: updated.id, ref: updated.ref };
+    if (updated) {
+      await onBookingConfirmed(db, updated.id);
+      return { ok: true, bookingId: updated.id, ref: updated.ref };
+    }
 
     // The update was blocked — either the DB's exclusion constraint (someone
     // else now holds that time) or another concurrent call already moved this

@@ -34,6 +34,14 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - Expired holds are swept (marked `expired`, freeing the slot) on every visit to the availability API and the admin calendar, so a stale hold never phantom-blocks a slot from other customers or from you.
 - 44 tests passing; full production build clean.
 
+## Phase 5 — done
+- **Instant alert to you** the moment a booking is confirmed — Telegram (if configured) and a backup email, with the customer's name, shoot, date, price and contact details.
+- **Confirmation email to the customer** with a calendar invite (`.ics` file) attached, so it drops straight into their phone's calendar.
+- **Automated reminders** — 7 days before, 24 hours before, 2 hours before the shoot, and a balance-due reminder afterward — configurable from the `reminder_rules` table (times and wording can change without touching code). Each is scheduled the moment a booking is confirmed and sent later by a small endpoint.
+- Email is sent through your own Gmail with an App Password — works with no domain of your own; swapping in a proper sender (Resend or similar) later is a one-file change (`lib/email.ts`), nothing else.
+- **Vercel's free tier only runs its own cron once a day** — too coarse for a "2 hours before" reminder — so reminders are sent by `GET /api/cron/notifications`, a secret-protected endpoint any free external scheduler can call every 10–15 minutes (setup below). A daily Vercel cron hits the same endpoint as a fallback safety net either way.
+- 5 new tests for the calendar-invite builder (date formatting, text escaping, structure); 49 tests passing total; full production build clean.
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
@@ -64,6 +72,12 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
    | `RAZORPAY_KEY_ID` | from Razorpay (see below) — optional, payments fall back to WhatsApp without it |
    | `RAZORPAY_KEY_SECRET` | from Razorpay (see below) — optional, same fallback |
    | `RAZORPAY_WEBHOOK_SECRET` | from Razorpay (see below) — optional, same fallback |
+   | `TELEGRAM_BOT_TOKEN` | from Telegram (see below) — optional |
+   | `TELEGRAM_CHAT_ID` | from Telegram (see below) — optional |
+   | `GMAIL_USER` | your Gmail address (see below) — optional |
+   | `GMAIL_APP_PASSWORD` | Gmail App Password (see below) — optional |
+   | `GMAIL_FROM_NAME` | e.g. `EDITORWALABHAIYA` — optional |
+   | `CRON_SECRET` | any long random text you choose — optional, needed for reminders |
 4. Deploy. Open `/admin`, enter your email, click the link.
 
 ### 3. Razorpay (Phase 4 — optional until you're ready)
@@ -77,6 +91,27 @@ Test mode keys work immediately with no KYC, so you can try the whole payment fl
    - Save, then copy the webhook secret it shows you into Vercel as `RAZORPAY_WEBHOOK_SECRET`
 4. Redeploy (Vercel → Deployments → ⋯ → Redeploy) so the new env vars take effect.
 5. Test it: use Razorpay's [test card numbers](https://razorpay.com/docs/payments/payments/test-card-upi-details/) on `/book` to confirm a booking end to end without moving real money.
+
+### 4. Notifications (Phase 5 — optional until you're ready)
+
+**Telegram (instant alerts to you):**
+1. In Telegram, message **@BotFather** → send `/newbot` → follow the prompts. Copy the token it gives you into Vercel as `TELEGRAM_BOT_TOKEN`.
+2. Send your new bot any message (e.g. "hi").
+3. In a browser, visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` (with your real token in place). Find `"chat":{"id": ...}` in the response — that number is `TELEGRAM_CHAT_ID`.
+
+**Gmail (customer confirmations, reminders, and a backup admin alert):**
+1. On the Google Account you want to send from: **Security → 2-Step Verification** (turn on if it isn't already).
+2. **Security → App passwords** → create one for "Mail". Copy the 16-character password.
+3. Add to Vercel: `GMAIL_USER` (the Gmail address), `GMAIL_APP_PASSWORD` (the 16-character password), `GMAIL_FROM_NAME` (e.g. `EDITORWALABHAIYA`).
+
+**The reminder scheduler (free, no signup fee):**
+1. Add a `CRON_SECRET` to Vercel — any long random text you make up yourself, e.g. `ewb-cron-8pQ2vTa9Kx`.
+2. Go to **cron-job.org** (free) → sign up → **Create cronjob**:
+   - URL: `https://ewb-booking.vercel.app/api/cron/notifications`
+   - Schedule: every 15 minutes
+   - Under **Advanced → Request headers**, add: `Authorization: Bearer <the exact CRON_SECRET you set>`
+3. Save. That's it — this is what actually sends reminders on time; Vercel's own daily cron is just a backup.
+4. Redeploy after adding the env vars so they take effect.
 
 ### Local
 ```bash
@@ -98,6 +133,5 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-5. Email + Telegram notifications, reminders, calendar invites
 6. Booking management: extra charges, balance links, reschedule / cancel / refund, dashboard numbers
 7. Landing page, policy pages, launch
