@@ -10,6 +10,12 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - Admin screens: Shoots & pricing, Locations & areas, Included & extras, Working hours, Policies (versioned), Settings, Overview with live price preview
 - Live public endpoints: `GET /api/public/config`, `POST /api/quote` (never cached)
 
+## Phase 2 — done
+- Availability engine (`lib/availability.ts`): timezone-correct conversion between wall-clock time and UTC using `Intl.DateTimeFormat` (not the fragile locale-string trick — works the same regardless of which timezone the server itself runs in), plus the slot-finding logic itself. 23 tests, including a live run against a real Postgres database that confirms the engine agrees exactly with the database's own double-booking constraint.
+- Live public endpoints: `GET /api/availability?date=&durationMinutes=` (one day's open slots), `GET /api/availability/days?from=&to=&durationMinutes=` (a date range's slot counts, for a calendar or date-strip)
+- Admin **Calendar**: a month view (working/closed days, free-slot counts, dots for blocks and bookings) and a day view (working hours for that weekday, existing blocks with delete, a form to block specific times or the whole day, and a live "free slots" preview using the exact same engine the booking page will use)
+- `scripts/smoke-availability.ts` — an optional dev-only script that runs the engine against a real local Postgres database to sanity-check it end to end. Needs `pg` and `tsx` (already in devDependencies) and a local Postgres server; not needed for normal use or deployment.
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
@@ -57,8 +63,7 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-2. Availability engine + slot API + admin calendar with date/time blocking
-3. Customer booking flow (7 steps, mobile-first, sticky price)
+3. Customer booking flow (7 steps, mobile-first, sticky price) — wires the real booking page up to the availability engine and pricing engine built so far
 4. Slot holds + Razorpay + webhooks + confirmation
 5. Email + Telegram notifications, reminders, calendar invites
 6. Booking management: extra charges, balance links, reschedule / cancel / refund, dashboard numbers

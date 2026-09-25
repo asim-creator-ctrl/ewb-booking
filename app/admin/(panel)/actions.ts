@@ -229,6 +229,65 @@ export async function savePolicy(fd: FormData) {
   }, "Policy saved as a new version. Existing bookings keep the version they agreed to.");
 }
 
+// ── calendar: specific-date/time blocks ─────────────────────
+// Unlike weekly_hours (the recurring week), a block covers one concrete span
+// of time — a day off, a half-day, a holiday range — converted from the
+// admin's wall-clock input into a UTC instant using the business's own
+// timezone, so it lines up exactly with how the availability engine reads it.
+import { addDaysStr, zonedTimeToUtc } from "@/lib/availability";
+
+const BlockSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start_time: time,
+  end_time: time,
+  reason: optText(200),
+}).refine((d) => d.end_time > d.start_time, { message: "end must be after start", path: ["end_time"] });
+
+export async function addBlock(fd: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const parsed = BlockSchema.safeParse(fields(fd));
+  const backTo = (kind: "ok" | "error", msg: string): never =>
+    back(`/admin/calendar/${String(fd.get("date") ?? "")}`, kind, msg);
+  if (!parsed.success) return backTo("error", parsed.error.issues[0]?.message ?? "Check the times.");
+  const { data: settings, error: sErr } = await supabase.from("settings").select("timezone").eq("id", 1).single();
+  if (sErr || !settings) return backTo("error", "Could not load settings.");
+  const starts_at = zonedTimeToUtc(parsed.data.date, parsed.data.start_time, settings.timezone).toISOString();
+  const ends_at = zonedTimeToUtc(parsed.data.date, parsed.data.end_time, settings.timezone).toISOString();
+  const { error } = await supabase.from("blocks").insert({ starts_at, ends_at, reason: parsed.data.reason, created_by: user.id });
+  if (error) return backTo("error", error.message);
+  await supabase.from("audit_logs").insert({ actor: user.id, action: "create", entity: "block", after: parsed.data });
+  return backTo("ok", "Time blocked.");
+}
+
+const BlockDaySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+export async function blockWholeDay(fd: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const parsed = BlockDaySchema.safeParse(fields(fd));
+  const backTo = (kind: "ok" | "error", msg: string): never =>
+    back(`/admin/calendar/${String(fd.get("date") ?? "")}`, kind, msg);
+  if (!parsed.success) return backTo("error", "Invalid date.");
+  const { data: settings, error: sErr } = await supabase.from("settings").select("timezone").eq("id", 1).single();
+  if (sErr || !settings) return backTo("error", "Could not load settings.");
+  const starts_at = zonedTimeToUtc(parsed.data.date, "00:00", settings.timezone).toISOString();
+  const ends_at = zonedTimeToUtc(addDaysStr(parsed.data.date, 1), "00:00", settings.timezone).toISOString();
+  const { error } = await supabase.from("blocks").insert({ starts_at, ends_at, reason: "Day off", created_by: user.id });
+  if (error) return backTo("error", error.message);
+  await supabase.from("audit_logs").insert({ actor: user.id, action: "create", entity: "block", after: parsed.data });
+  return backTo("ok", "Whole day blocked.");
+}
+
+export async function deleteBlock(fd: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const parsed = z.object({ id: uuid, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(fields(fd));
+  const backTo = (kind: "ok" | "error", msg: string): never =>
+    back(`/admin/calendar/${String(fd.get("date") ?? "")}`, kind, msg);
+  if (!parsed.success) return backTo("error", "Invalid block.");
+  const { error } = await supabase.from("blocks").delete().eq("id", parsed.data.id);
+  if (error) return backTo("error", error.message);
+  await supabase.from("audit_logs").insert({ actor: user.id, action: "delete", entity: "block", entity_id: parsed.data.id });
+  return backTo("ok", "Block removed.");
+}
+
 // ── session ──────────────────────────────────────────────────
 export async function signOut() {
   const { supabase } = await requireAdmin();

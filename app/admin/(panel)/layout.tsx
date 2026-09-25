@@ -5,6 +5,7 @@ import { signOut } from "./actions";
 const nav = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/services", label: "Shoots & pricing" },
+  { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/locations", label: "Locations & areas" },
   { href: "/admin/inclusions", label: "Included & extras" },
   { href: "/admin/hours", label: "Working hours" },
