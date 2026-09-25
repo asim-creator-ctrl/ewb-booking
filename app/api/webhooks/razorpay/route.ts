@@ -6,7 +6,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/razorpay";
-import { confirmBookingByOrderId } from "@/lib/bookings";
+import { confirmBookingByOrderId, confirmBalancePaymentByLinkId } from "@/lib/bookings";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  let event: { event?: string; payload?: { payment?: { entity?: Record<string, unknown> } } };
+  let event: {
+    event?: string;
+    payload?: { payment?: { entity?: Record<string, unknown> }; payment_link?: { entity?: { id?: string } } };
+  };
   try {
     event = JSON.parse(rawBody);
   } catch {
@@ -42,6 +45,14 @@ export async function POST(req: Request) {
       if (payment?.order_id && payment?.id) {
         await confirmBookingByOrderId(db, {
           gatewayOrderId: String(payment.order_id), gatewayPaymentId: String(payment.id),
+          method: payment.method ? String(payment.method) : undefined,
+        });
+      }
+    } else if (event.event === "payment_link.paid") {
+      const linkId = event.payload?.payment_link?.entity?.id;
+      if (linkId && payment?.id) {
+        await confirmBalancePaymentByLinkId(db, {
+          gatewayLinkId: linkId, gatewayPaymentId: String(payment.id),
           method: payment.method ? String(payment.method) : undefined,
         });
       }

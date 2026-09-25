@@ -42,6 +42,17 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - **Vercel's free tier only runs its own cron once a day** — too coarse for a "2 hours before" reminder — so reminders are sent by `GET /api/cron/notifications`, a secret-protected endpoint any free external scheduler can call every 10–15 minutes (setup below). A daily Vercel cron hits the same endpoint as a fallback safety net either way.
 - 5 new tests for the calendar-invite builder (date formatting, text escaping, structure); 49 tests passing total; full production build clean.
 
+## Phase 6 — done
+- **Admin → Bookings**: every booking, filterable (Upcoming / Today / Pending balance / All), each linking to a full detail page.
+- **Booking detail page**: customer contact, full price breakdown, payment history, and every action from here on:
+  - **Add an extra charge or a discount** (studio rental, travel, props — whatever comes up after booking) — updates the balance owed immediately, computed fresh from the booking's items and payments every time rather than stored as a number that could drift.
+  - **Send a balance payment link** — a real Razorpay Payment Link for whatever's currently owed, with a ready WhatsApp message and share button. Paid automatically via webhook, or you can **mark it paid manually** for cash/UPI collected in person.
+  - **Mark the shoot completed**, **cancel** (with an optional automatic refund of the advance via Razorpay), and **reschedule** (checked against your blocks and every other booking — the same database guarantee from Phase 2 still applies).
+  - **Admin notes** — private, never shown to the customer.
+- **Overview dashboard** now shows real numbers: today's shoots, upcoming confirmed bookings, bookings with a pending balance, this month's revenue, and total outstanding balance — each linking straight to the filtered list.
+- One more Razorpay webhook event to add: open your existing webhook (Settings → Webhooks → the one you made in Phase 4) and add **`payment_link.paid`** alongside the two you already have — this is what lets a balance payment link confirm itself automatically.
+- Full production build clean; all 49 tests still passing (this phase's logic — balance calculation, reschedule conflict handling, cancellation — was verified directly against a real Postgres database rather than adding more unit tests, since it's mostly database queries rather than pure functions).
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
@@ -133,5 +144,4 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-6. Booking management: extra charges, balance links, reschedule / cancel / refund, dashboard numbers
 7. Landing page, policy pages, launch

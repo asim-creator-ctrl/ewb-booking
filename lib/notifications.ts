@@ -99,3 +99,24 @@ export async function onBookingConfirmed(db: Db, bookingId: string): Promise<voi
     console.error("onBookingConfirmed failed:", e);
   }
 }
+
+/** Fires when a booking's balance is paid (Payment Link webhook, or admin marking it paid manually). */
+export async function onBalancePaid(db: Db, bookingId: string): Promise<void> {
+  try {
+    const { data: settings } = await db.from("settings").select("brand_name, contact_email").eq("id", 1).single();
+    const { data: booking } = await db.from("bookings").select("ref, service_name, customers(full_name)").eq("id", bookingId).single();
+    if (!settings || !booking) return;
+    const customer = Array.isArray(booking.customers) ? booking.customers[0] : booking.customers;
+    const msg = ["<b>Balance received</b>", booking.ref ?? "", `${customer?.full_name ?? ""} — ${booking.service_name}`].filter(Boolean).join("\n");
+
+    if (isTelegramConfigured()) {
+      try { await sendTelegramMessage(msg); } catch (e) { console.error("Telegram balance alert failed:", e); }
+    }
+    if (isEmailConfigured() && settings.contact_email) {
+      try { await sendEmail({ to: settings.contact_email, subject: `Balance received — ${booking.ref ?? booking.service_name}`, html: msg.replace(/\n/g, "<br>") }); }
+      catch (e) { console.error("Admin balance email failed:", e); }
+    }
+  } catch (e) {
+    console.error("onBalancePaid failed:", e);
+  }
+}

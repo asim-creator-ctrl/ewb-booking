@@ -15,8 +15,8 @@ import { createServiceClient } from "./supabase/service";
 import { loadBookingConfig } from "./config";
 import { calculatePrice } from "./pricing";
 import { addDaysStr, getAvailableSlotsForDate, zonedTimeToUtc } from "./availability";
-import { createRazorpayOrder } from "./razorpay";
-import { onBookingConfirmed } from "./notifications";
+import { createRazorpayOrder, createRazorpayPaymentLink, createRazorpayRefund } from "./razorpay";
+import { onBookingConfirmed, onBalancePaid } from "./notifications";
 
 type Db = ReturnType<typeof createServiceClient>;
 
@@ -181,4 +181,98 @@ export async function confirmBookingByOrderId(db: Db, opts: { gatewayOrderId: st
   }
 
   return { ok: false, bookingId: booking.id, error: `Unexpected booking status: ${booking.status}` };
+}
+
+// ── booking management (Phase 6) ────────────────────────────
+// Balance owed is always computed fresh from booking_items + payments rather
+// than stored as a running number, so it can never drift out of sync.
+export async function computeBalanceOwed(db: Db, bookingId: string): Promise<number> {
+  const { data: booking } = await db.from("bookings").select("total_paise, advance_paise").eq("id", bookingId).single();
+  if (!booking) return 0;
+  const [{ data: items }, { data: payments }] = await Promise.all([
+    db.from("booking_items").select("kind, amount_paise").eq("booking_id", bookingId),
+    db.from("payments").select("kind, amount_paise, status").eq("booking_id", bookingId),
+  ]);
+  const itemsTotal = (items ?? []).reduce((sum, i) => sum + (i.kind === "discount" ? -i.amount_paise : i.amount_paise), 0);
+  const balancePaid = (payments ?? []).filter((p) => p.kind === "balance" && p.status === "captured").reduce((sum, p) => sum + p.amount_paise, 0);
+  return Math.max(0, booking.total_paise - booking.advance_paise + itemsTotal - balancePaid);
+}
+
+/** Confirmed via the Razorpay Payment Link webhook (payment_link.paid) — a separate flow from the Checkout advance, matched by link id instead of order id. */
+export async function confirmBalancePaymentByLinkId(db: Db, opts: { gatewayLinkId: string; gatewayPaymentId: string; method?: string }): Promise<{ ok: boolean; bookingId?: string; error?: string }> {
+  const { data: payment } = await db.from("payments").select("id, booking_id, status").eq("gateway_link_id", opts.gatewayLinkId).eq("kind", "balance").maybeSingle();
+  if (!payment) return { ok: false, error: "Unknown payment link." };
+  if (payment.status === "captured") return { ok: true, bookingId: payment.booking_id }; // idempotent: webhook can redeliver
+
+  await db.from("payments").update({ gateway_payment_id: opts.gatewayPaymentId, status: "captured", method: opts.method ?? null }).eq("id", payment.id);
+  await db.from("bookings").update({ payment_status: "fully_paid" }).eq("id", payment.booking_id);
+  await onBalancePaid(db, payment.booking_id);
+  return { ok: true, bookingId: payment.booking_id };
+}
+
+/** Creates a Razorpay Payment Link for whatever is currently owed and records it so the webhook can find it later. */
+export async function sendBalanceLink(db: Db, bookingId: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const { data: booking } = await db.from("bookings")
+    .select("id, ref, service_name, customers(full_name, email, whatsapp)").eq("id", bookingId).single();
+  if (!booking) return { ok: false, error: "Booking not found." };
+  const customer = Array.isArray(booking.customers) ? booking.customers[0] : booking.customers;
+  if (!customer) return { ok: false, error: "Customer not found." };
+
+  const balance = await computeBalanceOwed(db, bookingId);
+  if (balance <= 0) return { ok: false, error: "Nothing outstanding on this booking." };
+
+  try {
+    const link = await createRazorpayPaymentLink({
+      amountPaise: balance, description: `Balance for ${booking.ref ?? booking.service_name}`, referenceId: booking.id,
+      customerName: customer.full_name, customerEmail: customer.email, customerContact: customer.whatsapp,
+    });
+    await db.from("payments").insert({ booking_id: booking.id, kind: "balance", gateway_link_id: link.id, amount_paise: balance, status: "created" });
+    return { ok: true, url: link.short_url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not create the payment link." };
+  }
+}
+
+/** Cancels a booking, optionally refunding the captured advance via Razorpay. */
+export async function cancelBooking(db: Db, bookingId: string, opts: { refund: boolean; reason?: string }): Promise<{ ok: boolean; error?: string }> {
+  const { data: booking } = await db.from("bookings").select("id, status, admin_notes").eq("id", bookingId).single();
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (booking.status === "cancelled" || booking.status === "completed") return { ok: false, error: `Already ${booking.status}.` };
+
+  if (opts.refund) {
+    const { data: advancePayment } = await db.from("payments").select("gateway_payment_id, amount_paise")
+      .eq("booking_id", bookingId).eq("kind", "advance").eq("status", "captured").maybeSingle();
+    if (advancePayment?.gateway_payment_id) {
+      try {
+        const refund = await createRazorpayRefund(advancePayment.gateway_payment_id);
+        await db.from("payments").insert({ booking_id: bookingId, kind: "refund", gateway_payment_id: refund.id, amount_paise: advancePayment.amount_paise, status: refund.status ?? "processed" });
+        await db.from("bookings").update({ payment_status: "refunded" }).eq("id", bookingId);
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? `Refund failed: ${e.message}` : "Refund failed." };
+      }
+    }
+  }
+
+  const notes = [booking.admin_notes, opts.reason ? `Cancelled: ${opts.reason}` : "Cancelled"].filter(Boolean).join("\n");
+  await db.from("bookings").update({ status: "cancelled", admin_notes: notes }).eq("id", bookingId);
+  return { ok: true };
+}
+
+/** Moves a booking to a new date/time, trusting the admin's own judgement on notice period but still checked against your blocks and every other booking. */
+export async function rescheduleBooking(db: Db, bookingId: string, newDate: string, newStartTime: string): Promise<{ ok: boolean; error?: string }> {
+  const { data: booking } = await db.from("bookings").select("id, duration_minutes, status").eq("id", bookingId).single();
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (!["held", "confirmed"].includes(booking.status)) return { ok: false, error: `Can't reschedule a ${booking.status} booking.` };
+
+  const { data: settings } = await db.from("settings").select("timezone").eq("id", 1).single();
+  const tz = settings?.timezone ?? "Asia/Kolkata";
+  const newStart = zonedTimeToUtc(newDate, newStartTime, tz);
+  const newEnd = new Date(newStart.getTime() + booking.duration_minutes * 60000);
+
+  const { data: overlappingBlocks } = await db.from("blocks").select("id").lt("starts_at", newEnd.toISOString()).gt("ends_at", newStart.toISOString());
+  if (overlappingBlocks?.length) return { ok: false, error: "That time is blocked on your calendar." };
+
+  const { error } = await db.from("bookings").update({ starts_at: newStart.toISOString(), ends_at: newEnd.toISOString() }).eq("id", bookingId);
+  if (error) return { ok: false, error: error.code === "23P01" ? "That time conflicts with another booking." : "Could not reschedule." };
+  return { ok: true };
 }

@@ -4,6 +4,7 @@ import { signOut } from "./actions";
 
 const nav = [
   { href: "/admin", label: "Overview" },
+  { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/services", label: "Shoots & pricing" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/locations", label: "Locations & areas" },

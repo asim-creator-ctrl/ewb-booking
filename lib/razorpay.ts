@@ -44,6 +44,28 @@ export async function createRazorpayRefund(paymentId: string, amountPaise?: numb
   return data;
 }
 
+export async function createRazorpayPaymentLink(opts: {
+  amountPaise: number;
+  description: string;
+  referenceId: string;
+  customerName: string;
+  customerEmail: string;
+  customerContact: string;
+}): Promise<{ id: string; short_url: string }> {
+  const res = await fetch(`${BASE}/payment_links`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: authHeader() },
+    body: JSON.stringify({
+      amount: opts.amountPaise, currency: "INR", description: opts.description, reference_id: opts.referenceId,
+      customer: { name: opts.customerName, email: opts.customerEmail, contact: opts.customerContact },
+      notify: { sms: false, email: false }, reminder_enable: false,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.description ?? "Could not create the payment link.");
+  return data;
+}
+
 export function verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
   const secret = process.env.RAZORPAY_KEY_SECRET;
   if (!secret) return false;
