@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* Darkroom palette: warm dark ground, paper text, one safelight-amber accent. */
+@theme {
+  --color-ground: #16120e;
+  --color-surface: #1f1a15;
+  --color-raise: #29221c;
+  --color-line: #3b332b;
+  --color-paper: #f0e8db;
+  --color-muted: #a0968a;
+  --color-safelight: #e3a13b;
+  --color-danger: #e5735f;
+  --color-ok: #9dbb84;
+
+  --font-sans: "Familjen Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Gloock", Georgia, "Times New Roman", serif;
+}
+
+html { background: var(--color-ground); color: var(--color-paper); color-scheme: dark; }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+:focus-visible { outline: 2px solid var(--color-safelight); outline-offset: 2px; border-radius: 4px; }
+
+.input {
+  width: 100%;
+  background: var(--color-ground);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+  color: var(--color-paper);
+}
+.input:focus { border-color: var(--color-safelight); outline: none; }
+textarea.input { line-height: 1.55; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  border-radius: 999px; padding: .5rem 1rem; font-weight: 600; font-size: .9rem;
+  min-height: 40px; cursor: pointer; transition: background-color .15s, color .15s;
+}
+.btn-primary { background: var(--color-safelight); color: #1a1208; }
+.btn-primary:hover { background: #f0b456; }
+.btn-quiet { color: var(--color-muted); border: 1px solid var(--color-line); }
+.btn-quiet:hover { color: var(--color-paper); border-color: var(--color-muted); }
+.btn-danger { color: var(--color-danger); }
+.btn-danger:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
