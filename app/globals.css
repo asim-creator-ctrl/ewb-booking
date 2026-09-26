@@ -45,4 +45,10 @@ textarea.input { line-height: 1.55; }
 .btn-danger { color: var(--color-danger); }
 .btn-danger:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
 
+@keyframes step-enter { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+.step-enter { animation: step-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.toast-in { animation: toast-in 0.2s ease-out; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

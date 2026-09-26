@@ -7,7 +7,7 @@
 // fully scheduled message straight to WhatsApp — a real submission today,
 // not a placeholder.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   addDaysStr, formatLocalDateLong, formatLocalTime, zonedDateStr,
@@ -64,6 +64,24 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const [slot, setSlot] = useState<Slot | null>(null);
   const [details, setDetails] = useState<Details>({ name: "", instagram: "", whatsapp: "", email: "", purpose: "", referenceLink: "" });
   const [terms, setTerms] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  }
+  // A brief pause so the tapped option's highlight is visible before the screen slides — feels chosen, not skipped.
+  function advanceTo(next: Step) {
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    advanceTimer.current = setTimeout(() => setStep(next), 180);
+  }
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+  }, []);
 
   const [days, setDays] = useState<DaySummary[] | null>(null);
   const [slotsForDay, setSlotsForDay] = useState<Slot[] | null>(null);
@@ -112,17 +130,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   }, [step, serviceId, durationId, locationOptionId, zoneId, locationOption]);
 
   const idx = STEPS.indexOf(step);
-  const goNext = () => setStep(STEPS[Math.min(idx + 1, STEPS.length - 1)]);
   const goBack = () => setStep(STEPS[Math.max(idx - 1, 0)]);
-
-  const canContinue: Record<Step, boolean> = {
-    shoot: !!serviceId,
-    duration: !!durationId,
-    date: !!dateStr && !!slot,
-    location: !!locationOption && !quote.requires_quote && quote.errors.length === 0,
-    details: details.name.trim().length > 1 && /\d{10,}/.test(details.whatsapp.replace(/\D/g, "")),
-    review: false,
-  };
 
   const locationSummary = locationOption
     ? `${locSetting === "outdoor" ? "Outdoor" : "Indoor"} · ${locationOption.label}${locationOption.uses_zone && zone ? `, ${zone.name}` : ""}${address ? ` (${address})` : ""}`
@@ -168,7 +176,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6">
+      <div key={step} className="step-enter flex-1 overflow-y-auto px-5 py-6">
         {step === "shoot" && (
           <div className="flex flex-col gap-5">
             <h1 className="font-display text-3xl leading-tight">What are we shooting?</h1>
@@ -177,7 +185,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               {config.services.map((s: Service) => {
                 const cheapest = config.durations.filter((d) => d.service_id === s.id).sort((a, b) => a.price_paise - b.price_paise)[0];
                 return (
-                  <button key={s.id} type="button" onClick={() => { setServiceId(s.id); setDurationId(null); }}
+                  <button key={s.id} type="button" onClick={() => { setServiceId(s.id); setDurationId(null); advanceTo("duration"); }}
                     className={`rounded-2xl border p-5 text-left transition-colors ${serviceId === s.id ? "border-safelight bg-safelight/10" : "border-line hover:border-muted"}`}>
                     <div className="text-lg font-semibold">{s.name}</div>
                     {s.description && <div className="mt-1 text-sm text-muted">{s.description}</div>}
@@ -194,7 +202,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
             <h1 className="font-display text-3xl leading-tight">How long?</h1>
             <div className="flex flex-col gap-2.5">
               {durationsForService.map((d: ServiceDuration) => (
-                <button key={d.id} type="button" onClick={() => setDurationId(d.id)}
+                <button key={d.id} type="button" onClick={() => { setDurationId(d.id); advanceTo("date"); }}
                   className={`flex min-h-16 items-center justify-between rounded-2xl border px-5 text-base ${durationId === d.id ? "border-safelight bg-safelight/10" : "border-line hover:border-muted"}`}>
                   <span className="font-semibold">{formatDuration(d.minutes)}</span>
                   <span>{formatINR(d.price_paise)}</span>
@@ -240,7 +248,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
                     {slotsForDay.map((s) => (
-                      <Pill key={s.start} active={slot?.start === s.start} onClick={() => setSlot(s)} className="min-h-12">
+                      <Pill key={s.start} active={slot?.start === s.start} onClick={() => { setSlot(s); advanceTo("location"); }} className="min-h-12">
                         {formatLocalTime(s.start, settings.timezone)}
                       </Pill>
                     ))}
@@ -268,7 +276,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               <div className="flex flex-col gap-2">
                 {optionsForSetting.length > 1 && <div className="text-sm text-muted">Where exactly?</div>}
                 {optionsForSetting.map((l: LocationOption) => (
-                  <button key={l.id} type="button" onClick={() => { setLocationOptionId(l.id); setZoneId(null); }}
+                  <button key={l.id} type="button" onClick={() => { setLocationOptionId(l.id); setZoneId(null); if (!l.uses_zone) advanceTo("details"); }}
                     className={`min-h-13 rounded-xl border px-4 py-3 text-left text-sm ${locationOptionId === l.id ? "border-safelight bg-safelight/10" : "border-line"}`}>
                     {l.label}
                   </button>
@@ -284,7 +292,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               <div className="flex flex-col gap-2">
                 <div className="text-sm text-muted">Which area?</div>
                 {config.zones.map((z) => (
-                  <button key={z.id} type="button" onClick={() => setZoneId(z.id)}
+                  <button key={z.id} type="button" onClick={() => { setZoneId(z.id); if (!z.requires_quote) advanceTo("details"); }}
                     className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left ${zoneId === z.id ? "border-safelight bg-safelight/10" : "border-line"}`}>
                     <span className="flex flex-col">
                       <span className="text-sm">{z.name}</span>
@@ -369,18 +377,27 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
         )}
       </div>
 
-      <footer className="border-t border-line px-5 py-4">
-        {step !== "review" ? (
-          <div className="flex items-center gap-4">
-            {duration && idx >= 1 && (
-              <div className="flex flex-1 flex-col">
-                <span className="text-xs text-muted">Total {formatINR(quote.total_paise)}</span>
-                <span className="text-base font-semibold">Advance <span className="text-safelight">{formatINR(quote.advance_paise)}</span></span>
-              </div>
-            )}
-            <button onClick={goNext} disabled={!canContinue[step]} className="btn btn-primary ml-auto min-w-32">Continue</button>
-          </div>
-        ) : (
+      {toast && (
+        <div className="toast-in pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-5">
+          <div className="pointer-events-auto rounded-full border border-danger/40 bg-ground px-4 py-2 text-sm text-danger shadow-lg">{toast}</div>
+        </div>
+      )}
+
+      {step === "details" ? (
+        <footer className="border-t border-line px-5 py-4">
+          <button
+            onClick={() => {
+              if (details.name.trim().length <= 1) return showToast("Enter your name to continue.");
+              if (!/\d{10,}/.test(details.whatsapp.replace(/\D/g, ""))) return showToast("Enter a valid WhatsApp number to continue.");
+              setStep("review");
+            }}
+            className="btn btn-primary block w-full text-center"
+          >
+            Continue
+          </button>
+        </footer>
+      ) : step === "review" ? (
+        <footer className="border-t border-line px-5 py-4">
           <PaymentActions
             razorpayConfigured={razorpayConfigured}
             terms={terms}
@@ -389,8 +406,15 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
             brandName={settings.brand_name}
             contactEmail={details.email || undefined}
           />
-        )}
-      </footer>
+        </footer>
+      ) : (
+        duration && idx >= 1 && (
+          <footer className="border-t border-line px-5 py-4">
+            <span className="text-xs text-muted">Total {formatINR(quote.total_paise)}</span>{" "}
+            <span className="text-base font-semibold">· Advance <span className="text-safelight">{formatINR(quote.advance_paise)}</span></span>
+          </footer>
+        )
+      )}
     </div>
   );
 }
