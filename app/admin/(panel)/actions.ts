@@ -95,6 +95,7 @@ const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 export async function uploadHeroImage(fd: FormData) {
   const { user } = await requireAdmin();
   const photo = fd.get("photo");
+  const positionY = Math.max(0, Math.min(100, Math.round(Number(fd.get("positionY")) || 50)));
   if (!(photo instanceof File) || photo.size === 0) back("/admin/settings", "error", "Choose a photo first.");
   if (!ALLOWED_PHOTO_TYPES.has(photo.type)) back("/admin/settings", "error", "Use a JPG, PNG or WEBP image.");
   if (photo.size > MAX_PHOTO_BYTES) back("/admin/settings", "error", "That photo is too large — keep it under 5MB.");
@@ -110,11 +111,22 @@ export async function uploadHeroImage(fd: FormData) {
   if (uploadErr) back("/admin/settings", "error", "Could not upload that photo. Try again.");
 
   const { data: pub } = db.storage.from("site-assets").getPublicUrl(path);
-  const { error } = await db.from("settings").update({ hero_image_url: pub.publicUrl }).eq("id", 1);
+  const { error } = await db.from("settings").update({ hero_image_url: pub.publicUrl, hero_image_position_y: positionY }).eq("id", 1);
   if (error) back("/admin/settings", "error", "Uploaded, but couldn't save it. Try again.");
 
-  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { hero_image_url: pub.publicUrl } });
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { hero_image_url: pub.publicUrl, hero_image_position_y: positionY } });
   back("/admin/settings", "ok", "Homepage photo updated.");
+}
+
+export async function updateHeroImagePosition(fd: FormData) {
+  const { user } = await requireAdmin();
+  const positionY = Math.max(0, Math.min(100, Math.round(Number(fd.get("positionY")) || 50)));
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const { error } = await db.from("settings").update({ hero_image_position_y: positionY }).eq("id", 1);
+  if (error) back("/admin/settings", "error", "Could not save the position.");
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { hero_image_position_y: positionY } });
+  back("/admin/settings", "ok", "Photo position updated.");
 }
 
 export async function removeHeroImage(fd: FormData) {

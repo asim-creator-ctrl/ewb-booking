@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/auth";
 import type { Settings } from "@/lib/types";
 import { Field, Flash, PageHead, Section, Toggle, type Search } from "@/components/ui";
-import { removeHeroImage, saveSettings, uploadHeroImage } from "../actions";
+import { saveSettings } from "../actions";
+import { HeroImageUploader } from "./HeroImageUploader";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Search }) {
   const { supabase } = await requireAdmin();
@@ -13,28 +14,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <PageHead title="Settings">Brand details and the rules every booking follows.</PageHead>
       <Flash {...await searchParams} />
 
-      <Section title="Homepage photo" hint="Shown at the top of your booking site. JPG, PNG or WEBP, up to 5MB — updates the moment you upload, no redeploy needed.">
-        <div className="flex max-w-3xl flex-wrap items-start gap-6">
-          <div className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl border border-line bg-surface text-xs text-muted">
-            {s.hero_image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={s.hero_image_url} alt="Homepage photo" className="h-full w-full object-cover" />
-            ) : (
-              "No photo yet"
-            )}
-          </div>
-          <div className="flex flex-col gap-3">
-            <form action={uploadHeroImage} className="flex flex-col gap-2">
-              <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required className="text-sm" />
-              <button className="btn btn-primary w-fit">Upload photo</button>
-            </form>
-            {s.hero_image_url && (
-              <form action={removeHeroImage}>
-                <button className="btn btn-quiet w-fit">Remove photo</button>
-              </form>
-            )}
-          </div>
-        </div>
+      <Section title="Homepage photo" hint="Shown at the top of your booking site, in this exact frame shape. JPG, PNG or WEBP, up to 5MB — updates the moment you save, no redeploy needed.">
+        <HeroImageUploader currentUrl={s.hero_image_url} currentPositionY={s.hero_image_position_y} />
       </Section>
 
       <form action={saveSettings} className="max-w-3xl">
