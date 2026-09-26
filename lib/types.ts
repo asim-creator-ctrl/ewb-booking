@@ -18,6 +18,7 @@ export type Settings = {
   tax_enabled: boolean;
   tax_label: string;
   tax_percent: number;
+  hero_image_url: string | null;
 };
 
 export type Service = {

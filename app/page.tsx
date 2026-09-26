@@ -32,8 +32,13 @@ export default async function Home() {
         <span className="font-display text-lg tracking-wide">{settings.brand_name}</span>
       </div>
 
-      <div className="flex h-64 items-end rounded-sm border border-line bg-surface p-4 text-sm text-muted">
-        [Your best portrait — full bleed]
+      <div className="h-64 overflow-hidden rounded-sm border border-line bg-surface">
+        {settings.hero_image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={settings.hero_image_url} alt={settings.brand_name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-end p-4 text-sm text-muted">[Your best portrait — full bleed]</div>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">

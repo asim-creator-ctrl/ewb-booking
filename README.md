@@ -62,10 +62,13 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 Everything code-related is done. What's left is entirely in your hands:
 - [ ] **Razorpay account review** approved (you're waiting on this already)
 - [ ] **A custom domain**, if you want one instead of `ewb-booking.vercel.app` — connect it in Vercel, then update `NEXT_PUBLIC_SITE_URL` in Vercel and the Site URL / Redirect URLs in Supabase to match
-- [ ] **Real photos** — replace the `[Your best portrait — full bleed]` placeholder on the homepage with 5–8 of your actual portraits
-- [ ] **Read through your 5 policies** one more time (`/legal/cancellation` etc. once live) — these are the actual terms a paying customer agrees to
+- [ ] **Real photos** — upload one from **Admin → Settings → Homepage photo** (see below — no code change needed, ever)
+- [ ] **Read through your 5 policies** one more time (`/legal/cancellation` etc., already live) — these are the actual terms a paying customer agrees to
 - [ ] **One real test booking** through the full flow, start to finish, once Razorpay is approved
 - [ ] Turn `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` on if you decide you want instant Telegram alerts after all (skipped in Phase 5 setup, easy to add anytime)
+
+## Homepage photo
+**Admin → Settings → Homepage photo** — upload a JPG, PNG or WEBP (up to 5MB) and it's live on the homepage immediately, no GitHub upload, no redeploy. Uploads go to a Supabase Storage bucket called `site-assets`, created by the `0003_hero_image.sql` migration; if the bucket somehow doesn't exist on your project, create it manually in Supabase → Storage → New bucket → name it exactly `site-assets` → Public.
 
 ## Setup (one time, ~15 minutes)
 

@@ -86,6 +86,47 @@ export async function saveSettings(fd: FormData) {
     (db, d) => db.from("settings").update(d).eq("id", 1), "Settings saved. Live now.");
 }
 
+// ── homepage photo ───────────────────────────────────────────
+// Uploaded straight to Supabase Storage from the admin panel — no code
+// change, no redeploy, live on the homepage the moment it's saved.
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+export async function uploadHeroImage(fd: FormData) {
+  const { user } = await requireAdmin();
+  const photo = fd.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) back("/admin/settings", "error", "Choose a photo first.");
+  if (!ALLOWED_PHOTO_TYPES.has(photo.type)) back("/admin/settings", "error", "Use a JPG, PNG or WEBP image.");
+  if (photo.size > MAX_PHOTO_BYTES) back("/admin/settings", "error", "That photo is too large — keep it under 5MB.");
+
+  // Storage uploads go through the service client: bypasses storage RLS the
+  // same way every other write in this app bypasses table RLS via the
+  // service role, rather than needing a separate admin storage policy.
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const ext = photo.type.split("/")[1];
+  const path = `hero-${Date.now()}.${ext}`;
+  const { error: uploadErr } = await db.storage.from("site-assets").upload(path, photo, { contentType: photo.type, upsert: false });
+  if (uploadErr) back("/admin/settings", "error", "Could not upload that photo. Try again.");
+
+  const { data: pub } = db.storage.from("site-assets").getPublicUrl(path);
+  const { error } = await db.from("settings").update({ hero_image_url: pub.publicUrl }).eq("id", 1);
+  if (error) back("/admin/settings", "error", "Uploaded, but couldn't save it. Try again.");
+
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { hero_image_url: pub.publicUrl } });
+  back("/admin/settings", "ok", "Homepage photo updated.");
+}
+
+export async function removeHeroImage(fd: FormData) {
+  const { user } = await requireAdmin();
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const { error } = await db.from("settings").update({ hero_image_url: null }).eq("id", 1);
+  if (error) back("/admin/settings", "error", "Could not remove the photo.");
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { hero_image_url: null } });
+  back("/admin/settings", "ok", "Homepage photo removed.");
+}
+
 // ── services ─────────────────────────────────────────────────
 const ServiceSchema = z.object({ name: text(80), description: optText(500), active: checkbox, sort: int(0, 999) });
 
