@@ -53,6 +53,20 @@ Next.js 16 · Supabase (Postgres + Auth) · Razorpay (Phase 4) · Vercel
 - One more Razorpay webhook event to add: open your existing webhook (Settings → Webhooks → the one you made in Phase 4) and add **`payment_link.paid`** alongside the two you already have — this is what lets a balance payment link confirm itself automatically.
 - Full production build clean; all 49 tests still passing (this phase's logic — balance calculation, reschedule conflict handling, cancellation — was verified directly against a real Postgres database rather than adding more unit tests, since it's mostly database queries rather than pure functions).
 
+## Phase 7 — done
+- **Homepage now has a full pricing table** (every shoot type, every duration, every price — live from your admin config) and an **FAQ section** answering the questions people actually DM about (price, availability, duration, outdoor/indoor, advance %, how to book) — the whole point being fewer repetitive DMs, per the original brief.
+- **Policy pages are live and linked** — `/legal/cancellation`, `/legal/terms`, `/legal/refund`, `/legal/privacy`, `/legal/rescheduling` — linked from the homepage footer and, importantly, from the booking Review step's "I accept the cancellation policy and terms" line, which previously mentioned them without a way to actually read them. These pages are also what Razorpay's own review checks for.
+- Full production build clean, all 49 tests passing.
+
+## Launch checklist
+Everything code-related is done. What's left is entirely in your hands:
+- [ ] **Razorpay account review** approved (you're waiting on this already)
+- [ ] **A custom domain**, if you want one instead of `ewb-booking.vercel.app` — connect it in Vercel, then update `NEXT_PUBLIC_SITE_URL` in Vercel and the Site URL / Redirect URLs in Supabase to match
+- [ ] **Real photos** — replace the `[Your best portrait — full bleed]` placeholder on the homepage with 5–8 of your actual portraits
+- [ ] **Read through your 5 policies** one more time (`/legal/cancellation` etc. once live) — these are the actual terms a paying customer agrees to
+- [ ] **One real test booking** through the full flow, start to finish, once Razorpay is approved
+- [ ] Turn `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` on if you decide you want instant Telegram alerts after all (skipped in Phase 5 setup, easy to add anytime)
+
 ## Setup (one time, ~15 minutes)
 
 ### 1. Supabase
@@ -144,4 +158,4 @@ npm test                     # pricing tests
 - `bookings_no_overlap` (Postgres exclusion constraint) makes overlapping live bookings impossible, including buffer time, even under simultaneous checkouts.
 
 ## Next phases
-7. Landing page, policy pages, launch
+None — all 7 phases from the original brief are built. See the Launch checklist above for what's left, and it's all outside the code.

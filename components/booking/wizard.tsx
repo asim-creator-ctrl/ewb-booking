@@ -359,7 +359,11 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
 
             <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed">
               <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-safelight" />
-              <span>I understand the advance confirms my date, and I accept the cancellation policy and terms.</span>
+              <span>
+                I understand the advance confirms my date, and I accept the{" "}
+                <Link href="/legal/cancellation" target="_blank" className="underline underline-offset-2">cancellation policy</Link> and{" "}
+                <Link href="/legal/terms" target="_blank" className="underline underline-offset-2">terms</Link>.
+              </span>
             </label>
           </div>
         )}
