@@ -19,7 +19,9 @@ export type Settings = {
   tax_label: string;
   tax_percent: number;
   hero_image_url: string | null;
+  hero_image_position_x: number;
   hero_image_position_y: number;
+  hero_image_zoom: number;
 };
 
 export type Service = {

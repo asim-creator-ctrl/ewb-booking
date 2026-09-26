@@ -37,7 +37,10 @@ export default async function Home() {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={settings.hero_image_url} alt={settings.brand_name} className="h-full w-full"
-            style={{ objectFit: "cover", objectPosition: `center ${settings.hero_image_position_y}%` }}
+            style={{
+              objectFit: "cover", objectPosition: `${settings.hero_image_position_x}% ${settings.hero_image_position_y}%`,
+              transform: `scale(${settings.hero_image_zoom / 100})`, transformOrigin: `${settings.hero_image_position_x}% ${settings.hero_image_position_y}%`,
+            }}
           />
         ) : (
           <div className="flex h-full items-end p-4 text-sm text-muted">[Your best portrait — full bleed]</div>

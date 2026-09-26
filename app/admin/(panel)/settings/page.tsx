@@ -15,7 +15,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <Flash {...await searchParams} />
 
       <Section title="Homepage photo" hint="Shown at the top of your booking site, in this exact frame shape. JPG, PNG or WEBP, up to 5MB — updates the moment you save, no redeploy needed.">
-        <HeroImageUploader currentUrl={s.hero_image_url} currentPositionY={s.hero_image_position_y} />
+        <HeroImageUploader
+          currentUrl={s.hero_image_url}
+          currentPositionX={s.hero_image_position_x}
+          currentPositionY={s.hero_image_position_y}
+          currentZoom={s.hero_image_zoom}
+        />
       </Section>
 
       <form action={saveSettings} className="max-w-3xl">

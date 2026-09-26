@@ -7,7 +7,8 @@ const config: BookingConfig = {
     brand_name: "EDITORWALABHAIYA", tagline: "", contact_email: null, instagram_username: "editorwalabhaiya",
     whatsapp_number: null, timezone: "Asia/Kolkata", currency: "INR", booking_enabled: true,
     advance_percent: 50, buffer_minutes: 30, hold_minutes: 15, min_notice_hours: 24, max_days_ahead: 60,
-    slot_interval_minutes: 30, tax_enabled: false, tax_label: "GST", tax_percent: 18, hero_image_url: null, hero_image_position_y: 50,
+    slot_interval_minutes: 30, tax_enabled: false, tax_label: "GST", tax_percent: 18,
+    hero_image_url: null, hero_image_position_x: 50, hero_image_position_y: 50, hero_image_zoom: 100,
   },
   services: [
     { id: "photo", name: "Photography", description: null, active: true, sort: 1 },
