@@ -25,6 +25,17 @@ type Slot = { start: string; end: string };
 
 type Details = { name: string; instagram: string; whatsapp: string; email: string; purpose: string; referenceLink: string };
 
+const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+const MONTH_LABELS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function ymd(y: number, m: number, d: number) {
+  const dt = new Date(y, m, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
 function Pill({ active, disabled, onClick, children, className = "" }: {
   active?: boolean; disabled?: boolean; onClick?: () => void; children: React.ReactNode; className?: string;
 }) {
@@ -100,15 +111,52 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
     [config, serviceId, durationId, locationOptionId, zoneId, locationOption],
   );
 
-  // Date strip: fetch once we know the duration.
+  // Calendar: the month currently in view, independent of the selected date.
+  const today = useMemo(() => zonedDateStr(new Date(), settings.timezone), [settings.timezone]);
+  const maxBookableDate = useMemo(
+    () => addDaysStr(today, Math.max(0, settings.max_days_ahead - 1)),
+    [today, settings.max_days_ahead],
+  );
+  const todayMonthStartISO = useMemo(() => {
+    const [y, m] = today.split("-").map(Number);
+    return ymd(y, m - 1, 1);
+  }, [today]);
+  const [viewYear, setViewYear] = useState(() => Number(today.slice(0, 4)));
+  const [viewMonth, setViewMonth] = useState(() => Number(today.slice(5, 7)) - 1);
+
+  const monthStartISO = ymd(viewYear, viewMonth, 1);
+  const monthLastISO = ymd(viewYear, viewMonth + 1, 0);
+  const canGoPrevMonth = monthStartISO > todayMonthStartISO;
+  const canGoNextMonth = ymd(viewYear, viewMonth + 1, 1) <= maxBookableDate;
+
+  function goPrevMonth() {
+    if (viewMonth === 0) { setViewYear(viewYear - 1); setViewMonth(11); }
+    else setViewMonth(viewMonth - 1);
+  }
+  function goNextMonth() {
+    if (viewMonth === 11) { setViewYear(viewYear + 1); setViewMonth(0); }
+    else setViewMonth(viewMonth + 1);
+  }
+
+  const monthCells = useMemo(() => {
+    const startWeekday = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    return Array.from({ length: 42 }, (_, i) => {
+      const dayNum = i - startWeekday + 1;
+      return { day: dayNum, inMonth: dayNum >= 1 && dayNum <= daysInMonth, iso: ymd(viewYear, viewMonth, dayNum) };
+    });
+  }, [viewYear, viewMonth]);
+
+  // Calendar: fetch availability for whichever month is in view, clamped to the bookable window.
   useEffect(() => {
     if (!durationId) return;
-    const today = zonedDateStr(new Date(), settings.timezone);
-    const to = addDaysStr(today, Math.max(0, Math.min(27, settings.max_days_ahead - 1)));
+    const from = monthStartISO < today ? today : monthStartISO;
+    const to = monthLastISO > maxBookableDate ? maxBookableDate : monthLastISO;
+    if (from > to) { setDays([]); return; }
     setDays(null);
-    fetch(`/api/availability/days?from=${today}&to=${to}&durationMinutes=${duration?.minutes ?? 60}`)
+    fetch(`/api/availability/days?from=${from}&to=${to}&durationMinutes=${duration?.minutes ?? 60}`)
       .then((r) => r.json()).then((data) => setDays(data.days ?? [])).catch(() => setDays([]));
-  }, [durationId, duration?.minutes, settings.timezone, settings.max_days_ahead]);
+  }, [durationId, duration?.minutes, monthStartISO, monthLastISO, today, maxBookableDate]);
 
   // Slots for the selected day.
   useEffect(() => {
@@ -215,26 +263,61 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
         {step === "date" && (
           <div className="flex flex-col gap-5">
             <h1 className="font-display text-3xl leading-tight">Pick a date</h1>
-            {days === null ? (
-              <p className="text-sm text-muted">Loading dates…</p>
-            ) : (
-              <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
-                {days.map((d) => {
-                  const dt = new Date(d.date + "T00:00:00Z");
-                  const wd = dt.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
-                  const disabled = d.closed || !d.hasSlots;
+
+            <div className="rounded-2xl border border-line/60 bg-surface/60 p-4 shadow-lg shadow-black/20 backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-semibold tracking-wide text-muted">SELECT DATE</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button" aria-label="Previous month" disabled={!canGoPrevMonth} onClick={goPrevMonth}
+                    className="text-muted transition-colors hover:text-paper disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                  </button>
+                  <span className="font-display text-sm">{MONTH_LABELS[viewMonth]} {viewYear}</span>
+                  <button
+                    type="button" aria-label="Next month" disabled={!canGoNextMonth} onClick={goNextMonth}
+                    className="text-safelight transition-colors hover:text-paper disabled:cursor-not-allowed disabled:text-muted disabled:opacity-30"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-1.5 grid grid-cols-7">
+                {WEEKDAY_LABELS.map((d, i) => (
+                  <div key={i} className="text-center text-[10px] font-semibold tracking-wide text-muted">{d}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-y-1.5">
+                {monthCells.map((c, i) => {
+                  const dayInfo = c.inMonth ? days?.find((d) => d.date === c.iso) ?? null : null;
+                  const isPast = c.iso < today;
+                  const beyondWindow = c.iso > maxBookableDate;
+                  const loading = c.inMonth && days === null && !isPast && !beyondWindow;
+                  const disabled = !c.inMonth || isPast || beyondWindow || loading || !dayInfo || dayInfo.closed || !dayInfo.hasSlots;
+                  const selected = c.inMonth && dateStr === c.iso;
                   return (
-                    <button key={d.date} type="button" disabled={disabled} onClick={() => setDateStr(d.date)}
-                      className={`flex h-[76px] w-[58px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl border text-sm disabled:cursor-not-allowed disabled:opacity-30 ${
-                        dateStr === d.date ? "border-safelight bg-safelight text-ground" : "border-line text-paper"
-                      }`}>
-                      <span className="text-xs">{wd}</span>
-                      <span className="text-lg font-semibold">{Number(d.date.slice(8))}</span>
+                    <button
+                      key={i} type="button" disabled={disabled}
+                      onClick={() => setDateStr(c.iso)}
+                      className={`mx-auto flex size-9 items-center justify-center rounded-full text-sm transition-colors disabled:cursor-not-allowed ${
+                        selected
+                          ? "bg-safelight font-semibold text-ground"
+                          : !c.inMonth
+                          ? "text-muted/30"
+                          : disabled
+                          ? "text-muted/50"
+                          : "text-paper hover:bg-raise"
+                      }`}
+                    >
+                      {c.day}
                     </button>
                   );
                 })}
               </div>
-            )}
+            </div>
 
             {dateStr && (
               <div className="flex flex-col gap-3">
