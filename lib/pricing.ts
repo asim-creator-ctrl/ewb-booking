@@ -10,7 +10,14 @@ export type PriceSelection = {
   durationId?: string | null;
   locationOptionId?: string | null;
   zoneId?: string | null;
-  /** Already-validated coupon (see lib/coupons.ts) — this function never looks one up itself. */
+  /**
+   * Two independent, already-validated discounts (see lib/coupons.ts) that
+   * can stack: an auto-apply offer picked up the moment the service was
+   * selected, no code typed, plus a coupon code the customer typed on top
+   * of it. This function never looks either one up itself.
+   */
+  offerCode?: string | null;
+  offerDiscountPercent?: number | null;
   couponCode?: string | null;
   couponDiscountPercent?: number | null;
 };
@@ -30,9 +37,11 @@ export type Quote = {
   notes: PriceNote[];
   requires_quote: boolean;  // can't be paid online; needs a custom quote first
   subtotal_paise: number;
-  discount_paise: number;
-  discount_percent: number;
+  offer_code: string | null;
+  offer_discount_percent: number;
   coupon_code: string | null;
+  coupon_discount_percent: number;
+  discount_paise: number;  // offer + coupon combined
   tax_paise: number;
   total_paise: number;
   advance_percent: number;
@@ -99,14 +108,27 @@ export function calculatePrice(config: BookingConfig, sel: PriceSelection): Quot
 
   const rawSubtotal = lines.reduce((sum, l) => sum + l.amount_paise, 0);
 
-  // A coupon is already validated by the caller (lib/coupons.ts) — this
-  // function just applies the percentage it was handed, same as it applies
-  // tax: a pure calculation, no DB lookup of its own.
-  const discountPercent = sel.couponDiscountPercent ?? 0;
-  const discountPaise = discountPercent > 0 && rawSubtotal > 0 ? roundToRupee((rawSubtotal * discountPercent) / 100) : 0;
-  if (discountPaise > 0) {
-    lines.push({ kind: "discount", label: `Coupon ${sel.couponCode ?? ""} (-${discountPercent}%)`.trim(), amount_paise: -discountPaise });
+  // Both discounts are already validated by the caller (lib/coupons.ts) —
+  // this function just applies the percentages it was handed, same as it
+  // applies tax: a pure calculation, no DB lookup of its own. Each is taken
+  // off the same raw subtotal and shown as its own line, rather than
+  // compounding one discount into the other's base — simpler to explain
+  // and to audit later ("offer took X off, coupon took Y off").
+  const offerPercent = sel.offerDiscountPercent ?? 0;
+  const offerPaise = offerPercent > 0 && rawSubtotal > 0 ? roundToRupee((rawSubtotal * offerPercent) / 100) : 0;
+  if (offerPaise > 0) {
+    lines.push({ kind: "discount", label: `Offer ${sel.offerCode ?? ""} (-${offerPercent}%)`.trim(), amount_paise: -offerPaise });
   }
+
+  const couponPercent = sel.couponDiscountPercent ?? 0;
+  const couponPaise = couponPercent > 0 && rawSubtotal > 0 ? roundToRupee((rawSubtotal * couponPercent) / 100) : 0;
+  if (couponPaise > 0) {
+    lines.push({ kind: "discount", label: `Coupon ${sel.couponCode ?? ""} (-${couponPercent}%)`.trim(), amount_paise: -couponPaise });
+  }
+
+  // Two generous discounts could in theory add to more than 100% off — never
+  // let the subtotal go negative over it.
+  const discountPaise = Math.min(offerPaise + couponPaise, rawSubtotal);
   const subtotal = rawSubtotal - discountPaise;
 
   const s = config.settings;
@@ -124,9 +146,11 @@ export function calculatePrice(config: BookingConfig, sel: PriceSelection): Quot
     notes,
     requires_quote: requiresQuote,
     subtotal_paise: subtotal,
+    offer_code: offerPaise > 0 ? (sel.offerCode ?? null) : null,
+    offer_discount_percent: offerPaise > 0 ? offerPercent : 0,
+    coupon_code: couponPaise > 0 ? (sel.couponCode ?? null) : null,
+    coupon_discount_percent: couponPaise > 0 ? couponPercent : 0,
     discount_paise: discountPaise,
-    discount_percent: discountPaise > 0 ? discountPercent : 0,
-    coupon_code: discountPaise > 0 ? (sel.couponCode ?? null) : null,
     tax_paise: tax,
     total_paise: total,
     advance_percent: advancePercent,
