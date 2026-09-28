@@ -17,6 +17,7 @@ import { calculatePrice } from "./pricing";
 import { addDaysStr, getAvailableSlotsForDate, zonedTimeToUtc } from "./availability";
 import { createRazorpayOrder, createRazorpayPaymentLink, createRazorpayRefund } from "./razorpay";
 import { onBookingConfirmed, onBalancePaid } from "./notifications";
+import { validateCoupon } from "./coupons";
 
 type Db = ReturnType<typeof createServiceClient>;
 
@@ -34,6 +35,7 @@ const HoldInput = z.object({
   slotStart: z.string().min(1),
   slotEnd: z.string().min(1),
   address: z.string().max(300).nullish(),
+  couponCode: z.string().trim().max(40).nullish(),
   customer: z.object({
     fullName: z.string().trim().min(1).max(120),
     instagram: z.string().trim().max(60).nullish(),
@@ -63,9 +65,21 @@ export async function createBookingHold(input: unknown): Promise<HoldResult> {
   const duration = config.durations.find((dur) => dur.id === d.durationId);
   if (!location || !service || !duration) return { ok: false, error: "That selection is no longer available.", code: "invalid" };
 
+  // A coupon in the payload is re-validated here, not trusted from the
+  // client — same defense-in-depth as everything else in this function.
+  let couponCode: string | null = null;
+  let couponDiscountPercent: number | null = null;
+  if (d.couponCode) {
+    const couponResult = await validateCoupon(db, d.couponCode, d.serviceId);
+    if (!couponResult.ok) return { ok: false, error: couponResult.error, code: "invalid" };
+    couponCode = couponResult.code;
+    couponDiscountPercent = couponResult.discountPercent;
+  }
+
   const quote = calculatePrice(config, {
     serviceId: d.serviceId, durationId: d.durationId, locationOptionId: d.locationOptionId,
     zoneId: location.uses_zone ? d.zoneId : null,
+    couponCode, couponDiscountPercent,
   });
   if (!quote.ok) return { ok: false, error: quote.errors[0] ?? "This can't be booked online — message me instead.", code: "invalid" };
 
@@ -117,7 +131,7 @@ export async function createBookingHold(input: unknown): Promise<HoldResult> {
     duration_minutes: duration.minutes, starts_at: d.slotStart, ends_at: d.slotEnd,
     buffer_minutes: config.settings.buffer_minutes, status: "held", payment_status: "unpaid",
     hold_expires_at: holdExpiresAt, location: locationSnapshot, pricing_snapshot: quote,
-    total_paise: quote.total_paise, advance_paise: quote.advance_paise,
+    total_paise: quote.total_paise, advance_paise: quote.advance_paise, coupon_code: couponCode,
     policy_ids: (activePolicies ?? []).map((p) => p.id),
     purpose: d.customer.purpose || null, customer_notes: d.customer.purpose || null,
     reference_link: d.customer.referenceLink || null,
@@ -150,7 +164,7 @@ export async function confirmBookingByOrderId(db: Db, opts: { gatewayOrderId: st
 
   await db.from("payments").update({ gateway_payment_id: opts.gatewayPaymentId, status: "captured", method: opts.method ?? null }).eq("id", payment.id);
 
-  const { data: booking } = await db.from("bookings").select("id, status, ref").eq("id", payment.booking_id).single();
+  const { data: booking } = await db.from("bookings").select("id, status, ref, coupon_code").eq("id", payment.booking_id).single();
   if (!booking) return { ok: false, error: "Unknown booking." };
 
   if (booking.status === "confirmed") return { ok: true, bookingId: booking.id, ref: booking.ref, alreadyConfirmed: true };
@@ -167,6 +181,12 @@ export async function confirmBookingByOrderId(db: Db, opts: { gatewayOrderId: st
 
     if (updated) {
       await onBookingConfirmed(db, updated.id);
+      // Informational only (no coupon carries a usage cap) — never block a
+      // confirmed, paid booking over a counter failing to update.
+      if (booking.coupon_code) {
+        try { await db.rpc("increment_coupon_usage", { p_code: booking.coupon_code }); }
+        catch (e) { console.error("increment_coupon_usage failed:", e); }
+      }
       return { ok: true, bookingId: updated.id, ref: updated.ref };
     }
 
