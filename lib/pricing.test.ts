@@ -31,6 +31,7 @@ const config: BookingConfig = {
     { id: "outside", name: "Outside Kolkata", description: null, charge_paise: 0, requires_quote: true, active: true, sort: 3 },
   ],
   inclusions: [],
+  offers: [],
 };
 
 describe("calculatePrice", () => {
