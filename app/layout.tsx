@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Book a shoot · EDITORWALABHAIYA",
-  description: "Check availability, see the price and book a shoot with EditorWalaBhaiya.",
+  title: "EDITORWALABHAIYA",
+  description: "Book a shoot or browse digital products from EditorWalaBhaiya.",
 };
 
 export const viewport: Viewport = { themeColor: "#16120e", width: "device-width", initialScale: 1 };
