@@ -5,14 +5,18 @@
 // and the Date step calls the live availability API so what's offered is
 // always real. A coupon typed on Review is checked against the server twice
 // more before it ever discounts a real payment: once on the authoritative
-// /api/quote refresh, and again inside createBookingHold.
+// /api/quote refresh, and again inside createBookingHold. An auto-apply
+// coupon (config.offers) skips the typing entirely — it's shown as a badge
+// right on the shoot card and applied the moment that service is picked,
+// but it's still just a coupon under the hood, so the same two re-checks
+// cover it too.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   addDaysStr, formatLocalDateLong, formatLocalTime, zonedDateStr,
 } from "@/lib/availability";
-import { calculatePrice, formatDuration, formatINR, type Quote } from "@/lib/pricing";
+import { calculatePrice, formatDuration, formatINR, roundToRupee, type Quote } from "@/lib/pricing";
 import type { BookingConfig, LocationOption, Service, ServiceDuration } from "@/lib/types";
 import { buildBookingWhatsAppMessage, whatsappLink } from "@/lib/whatsapp";
 import PaymentActions from "./PaymentActions";
@@ -109,6 +113,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const locationOption = config.locationOptions.find((l) => l.id === locationOptionId) ?? null;
   const zone = config.zones.find((z) => z.id === zoneId) ?? null;
   const optionsForSetting = config.locationOptions.filter((l) => l.setting === locSetting);
+  const offersByService = useMemo(() => new Map(config.offers.map((o) => [o.service_id, o])), [config.offers]);
 
   const quote = useMemo(
     () => calculatePrice(config, {
@@ -120,11 +125,14 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
 
   // A coupon was checked against one specific service — picking a different
   // one invalidates it, so don't carry a stale discount into a new selection.
+  // If the newly picked service has an auto-apply offer, it takes over here
+  // with no typing needed — the same badge the customer just saw on its card.
   useEffect(() => {
-    setAppliedCoupon(null);
+    const offer = serviceId ? offersByService.get(serviceId) : undefined;
+    setAppliedCoupon(offer ? { code: offer.code, discountPercent: offer.discount_percent } : null);
     setCouponError(null);
     setCouponInput("");
-  }, [serviceId]);
+  }, [serviceId, offersByService]);
 
   async function applyCoupon() {
     if (!serviceId || !couponInput.trim()) return;
@@ -281,12 +289,33 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
             <div className="flex flex-col gap-3">
               {config.services.map((s: Service) => {
                 const cheapest = config.durations.filter((d) => d.service_id === s.id).sort((a, b) => a.price_paise - b.price_paise)[0];
+                const offer = offersByService.get(s.id);
+                const discounted = cheapest && offer ? roundToRupee(cheapest.price_paise * (1 - offer.discount_percent / 100)) : null;
+                const pct = offer && Number.isInteger(offer.discount_percent) ? offer.discount_percent : offer?.discount_percent.toFixed(1);
                 return (
                   <button key={s.id} type="button" onClick={() => { setServiceId(s.id); setDurationId(null); advanceTo("duration"); }}
                     className={`rounded-2xl border p-5 text-left transition-colors ${serviceId === s.id ? "border-safelight bg-safelight/10" : "border-line hover:border-muted"}`}>
-                    <div className="text-lg font-semibold">{s.name}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-lg font-semibold">{s.name}</div>
+                      {offer && (
+                        <span className="shrink-0 rounded-full bg-gradient-to-br from-[#f2c374] to-safelight px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-ground shadow-[0_2px_10px_-2px_rgba(227,161,59,0.6)]">
+                          {pct}% off
+                        </span>
+                      )}
+                    </div>
                     {s.description && <div className="mt-1 text-sm text-muted">{s.description}</div>}
-                    {cheapest && <div className="mt-2 text-sm text-safelight">from {formatINR(cheapest.price_paise)}</div>}
+                    {cheapest && (
+                      <div className="mt-2 flex items-baseline gap-2 text-sm">
+                        {discounted != null ? (
+                          <>
+                            <span className="text-muted line-through">{formatINR(cheapest.price_paise)}</span>
+                            <span className="font-semibold text-safelight">from {formatINR(discounted)}</span>
+                          </>
+                        ) : (
+                          <span className="text-safelight">from {formatINR(cheapest.price_paise)}</span>
+                        )}
+                      </div>
+                    )}
                   </button>
                 );
               })}

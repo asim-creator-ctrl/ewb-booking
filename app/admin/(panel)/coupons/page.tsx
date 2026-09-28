@@ -17,7 +17,8 @@ export default async function CouponsPage({ searchParams }: { searchParams: Sear
   return (
     <>
       <PageHead title="Coupons">
-        Percentage discounts for specific shoot types, valid only within a date range. Customers apply a code on the
+        Percentage discounts for specific shoot types, valid only within a date range. Turn on &ldquo;Auto-apply&rdquo;
+        to show one as an offer badge right on the shoot card &mdash; otherwise customers type the code on the
         booking page&rsquo;s Review step.
       </PageHead>
       <Flash {...await searchParams} />
@@ -47,6 +48,9 @@ export default async function CouponsPage({ searchParams }: { searchParams: Sear
                       </label>
                     ))}
                   </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <Toggle name="auto_apply" label="Auto-apply — show as an offer on the service card, no code needed" defaultChecked={c.auto_apply} />
                 </div>
                 <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
                   <Toggle name="active" label="Active" defaultChecked={c.active} />
@@ -80,6 +84,9 @@ export default async function CouponsPage({ searchParams }: { searchParams: Sear
                 ))}
                 {(services ?? []).length === 0 && <span className="text-sm text-muted">Add a shoot type first.</span>}
               </div>
+            </div>
+            <div className="sm:col-span-2">
+              <Toggle name="auto_apply" label="Auto-apply — show as an offer on the service card, no code needed" />
             </div>
             <input type="hidden" name="active" value="on" />
             <div className="sm:col-span-2"><button className="btn btn-primary">Add coupon</button></div>

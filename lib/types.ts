@@ -106,7 +106,19 @@ export type Coupon = {
   valid_from: string;
   valid_until: string;
   active: boolean;
+  auto_apply: boolean;
   times_used: number;
+};
+
+// A currently-live, auto-apply coupon for one service — the badge shown on
+// the shoot-selection card and the discount applied the moment that service
+// is picked, with no code to type. Computed server-side in lib/config.ts
+// (date range + active already filtered), one entry per service at most
+// (the best discount wins if more than one auto coupon covers it).
+export type ServiceOffer = {
+  service_id: string;
+  code: string;
+  discount_percent: number;
 };
 
 export type BookingConfig = {
@@ -116,4 +128,5 @@ export type BookingConfig = {
   locationOptions: LocationOption[];
   zones: LocationZone[];
   inclusions: Inclusion[];
+  offers: ServiceOffer[];
 };
