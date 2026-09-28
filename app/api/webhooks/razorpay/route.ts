@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/razorpay";
 import { confirmBookingByOrderId, confirmBalancePaymentByLinkId } from "@/lib/bookings";
+import { confirmPurchaseByOrderId } from "@/lib/downloads";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +44,16 @@ export async function POST(req: Request) {
     const payment = event.payload?.payment?.entity;
     if (event.event === "payment.captured" || event.event === "order.paid") {
       if (payment?.order_id && payment?.id) {
-        await confirmBookingByOrderId(db, {
-          gatewayOrderId: String(payment.order_id), gatewayPaymentId: String(payment.id),
-          method: payment.method ? String(payment.method) : undefined,
-        });
+        const orderId = String(payment.order_id);
+        const paymentId = String(payment.id);
+        const method = payment.method ? String(payment.method) : undefined;
+        // An order belongs to either a booking advance or a product purchase,
+        // never both — try the booking first, and only if that order id is
+        // unknown there (a product order) does the product path run.
+        const bookingResult = await confirmBookingByOrderId(db, { gatewayOrderId: orderId, gatewayPaymentId: paymentId, method });
+        if (!bookingResult.ok && bookingResult.error === "Unknown payment order.") {
+          await confirmPurchaseByOrderId(db, { gatewayOrderId: orderId, gatewayPaymentId: paymentId, method });
+        }
       }
     } else if (event.event === "payment_link.paid") {
       const linkId = event.payload?.payment_link?.entity?.id;
@@ -58,7 +65,9 @@ export async function POST(req: Request) {
       }
     } else if (event.event === "payment.failed") {
       if (payment?.order_id) {
-        await db.from("payments").update({ status: "failed" }).eq("gateway_order_id", String(payment.order_id)).eq("kind", "advance");
+        const orderId = String(payment.order_id);
+        await db.from("payments").update({ status: "failed" }).eq("gateway_order_id", orderId).eq("kind", "advance");
+        await db.from("purchases").update({ status: "failed" }).eq("gateway_order_id", orderId).eq("status", "created");
       }
     }
     await db.from("webhook_events").update({ processed_at: new Date().toISOString() }).eq("gateway_event_id", eventId);

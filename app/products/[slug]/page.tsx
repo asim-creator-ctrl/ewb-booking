@@ -5,6 +5,8 @@ import { loadBookingConfig } from "@/lib/config";
 import { getProductBySlug } from "@/lib/products";
 import { formatINR } from "@/lib/pricing";
 import { whatsappLink } from "@/lib/whatsapp";
+import { isRazorpayConfigured } from "@/lib/razorpay";
+import BuyButton from "@/components/products/BuyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +16,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: product ? `${product.name} · EDITORWALABHAIYA` : "Digital Products · EDITORWALABHAIYA" };
 }
 
-// Checkout (Razorpay + instant secure download) is Phase 3. Until it ships,
-// "Buy now" opens a pre-filled WhatsApp message so there's a working way to
-// sell today instead of a dead button.
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [product, config] = await Promise.all([getProductBySlug(slug), loadBookingConfig()]);
   if (!product) notFound();
 
   const { settings } = config;
+  const razorpayConfigured = isRazorpayConfigured();
   const buyMessage = `Hi! I'd like to buy "${product.name}" (${formatINR(product.price_paise)}) from your Digital Products.`;
-  const buyHref = settings.whatsapp_number
+  const fallbackHref = settings.whatsapp_number
     ? whatsappLink(settings.whatsapp_number, buyMessage)
     : settings.contact_email
       ? `mailto:${settings.contact_email}?subject=${encodeURIComponent(`Buying: ${product.name}`)}`
@@ -95,22 +95,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="fixed inset-x-0 bottom-0 mx-auto max-w-md border-t border-line bg-ground/90 px-5 pb-6 pt-3.5 backdrop-blur-lg sm:max-w-lg">
-        {buyHref ? (
-          <a
-            href={buyHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-[50px] w-full items-center justify-center rounded-full bg-safelight text-[15px] font-bold text-ground"
-          >
-            Buy now &mdash; {formatINR(product.price_paise)}
-          </a>
-        ) : (
-          <div className="flex h-[50px] w-full items-center justify-center rounded-full bg-line text-[15px] font-bold text-muted">
-            Buy now &mdash; {formatINR(product.price_paise)}
-          </div>
-        )}
+        <BuyButton
+          productId={product.id}
+          amountPaise={product.price_paise}
+          razorpayConfigured={razorpayConfigured}
+          brandName={settings.brand_name}
+          fallbackHref={fallbackHref}
+          fallbackLabel={`Buy now — ${formatINR(product.price_paise)}`}
+        />
         <p className="mt-2 text-center text-[11px] text-muted">
-          {settings.whatsapp_number ? "Message us on WhatsApp to complete your purchase" : "Contact us to complete your purchase"}
+          {razorpayConfigured ? "Instant download after payment" : settings.whatsapp_number ? "Message us on WhatsApp to complete your purchase" : "Contact us to complete your purchase"}
           {" "}&middot; delivered by email
         </p>
       </div>
