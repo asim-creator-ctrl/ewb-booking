@@ -10,10 +10,13 @@ export type PriceSelection = {
   durationId?: string | null;
   locationOptionId?: string | null;
   zoneId?: string | null;
+  /** Already-validated coupon (see lib/coupons.ts) — this function never looks one up itself. */
+  couponCode?: string | null;
+  couponDiscountPercent?: number | null;
 };
 
 export type PriceLine = {
-  kind: "base" | "location" | "zone" | "tax";
+  kind: "base" | "location" | "zone" | "discount" | "tax";
   label: string;
   amount_paise: number;
 };
@@ -27,6 +30,9 @@ export type Quote = {
   notes: PriceNote[];
   requires_quote: boolean;  // can't be paid online; needs a custom quote first
   subtotal_paise: number;
+  discount_paise: number;
+  discount_percent: number;
+  coupon_code: string | null;
   tax_paise: number;
   total_paise: number;
   advance_percent: number;
@@ -91,7 +97,17 @@ export function calculatePrice(config: BookingConfig, sel: PriceSelection): Quot
     }
   }
 
-  const subtotal = lines.reduce((sum, l) => sum + l.amount_paise, 0);
+  const rawSubtotal = lines.reduce((sum, l) => sum + l.amount_paise, 0);
+
+  // A coupon is already validated by the caller (lib/coupons.ts) — this
+  // function just applies the percentage it was handed, same as it applies
+  // tax: a pure calculation, no DB lookup of its own.
+  const discountPercent = sel.couponDiscountPercent ?? 0;
+  const discountPaise = discountPercent > 0 && rawSubtotal > 0 ? roundToRupee((rawSubtotal * discountPercent) / 100) : 0;
+  if (discountPaise > 0) {
+    lines.push({ kind: "discount", label: `Coupon ${sel.couponCode ?? ""} (-${discountPercent}%)`.trim(), amount_paise: -discountPaise });
+  }
+  const subtotal = rawSubtotal - discountPaise;
 
   const s = config.settings;
   const tax = s.tax_enabled ? roundToRupee((subtotal * Number(s.tax_percent)) / 100) : 0;
@@ -108,6 +124,9 @@ export function calculatePrice(config: BookingConfig, sel: PriceSelection): Quot
     notes,
     requires_quote: requiresQuote,
     subtotal_paise: subtotal,
+    discount_paise: discountPaise,
+    discount_percent: discountPaise > 0 ? discountPercent : 0,
+    coupon_code: discountPaise > 0 ? (sel.couponCode ?? null) : null,
     tax_paise: tax,
     total_paise: total,
     advance_percent: advancePercent,

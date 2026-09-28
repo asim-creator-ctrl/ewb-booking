@@ -97,4 +97,46 @@ describe("calculatePrice", () => {
     expect(formatINR(1300000)).toBe("₹13,000");
     expect(formatINR(10000000)).toBe("₹1,00,000");
   });
+
+  it("applies a coupon's percentage off the pre-tax subtotal", () => {
+    const q = calculatePrice(config, {
+      serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "south",
+      couponCode: "DIWALI20", couponDiscountPercent: 20,
+    });
+    // rawSubtotal 5,500 → 20% off = 1,100 discount → subtotal 4,400
+    expect(q.discount_paise).toBe(110000);
+    expect(q.discount_percent).toBe(20);
+    expect(q.coupon_code).toBe("DIWALI20");
+    expect(q.subtotal_paise).toBe(440000);
+    expect(q.total_paise).toBe(440000);
+    expect(q.lines.find((l) => l.kind === "discount")).toEqual({
+      kind: "discount", label: "Coupon DIWALI20 (-20%)", amount_paise: -110000,
+    });
+  });
+
+  it("taxes the discounted subtotal, not the raw one", () => {
+    const c = { ...config, settings: { ...config.settings, tax_enabled: true } };
+    const q = calculatePrice(c, {
+      serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "north",
+      couponCode: "SAVE10", couponDiscountPercent: 10,
+    });
+    // rawSubtotal 5,000 → 10% off = 500 → subtotal 4,500 → 18% tax = 810 → total 5,310
+    expect(q.discount_paise).toBe(50000);
+    expect(q.tax_paise).toBe(81000);
+    expect(q.total_paise).toBe(531000);
+    expect(q.subtotal_paise + q.tax_paise).toBe(q.total_paise);
+  });
+
+  it("ignores a zero or missing discount percent", () => {
+    const q1 = calculatePrice(config, { serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "south" });
+    const q2 = calculatePrice(config, {
+      serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "south",
+      couponCode: "NOPE", couponDiscountPercent: 0,
+    });
+    expect(q1.discount_paise).toBe(0);
+    expect(q1.coupon_code).toBeNull();
+    expect(q2.discount_paise).toBe(0);
+    expect(q2.coupon_code).toBeNull();
+    expect(q2.lines.some((l) => l.kind === "discount")).toBe(false);
+  });
 });

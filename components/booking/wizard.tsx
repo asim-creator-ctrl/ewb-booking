@@ -3,9 +3,9 @@
 // The actual booking flow. Selections drive `calculatePrice` directly for the
 // instant sticky total (same pure function the admin's price preview uses),
 // and the Date step calls the live availability API so what's offered is
-// always real. Until Phase 4 wires up Razorpay, "Pay" sends a fully priced,
-// fully scheduled message straight to WhatsApp — a real submission today,
-// not a placeholder.
+// always real. A coupon typed on Review is checked against the server twice
+// more before it ever discounts a real payment: once on the authoritative
+// /api/quote refresh, and again inside createBookingHold.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -75,6 +75,10 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const [slot, setSlot] = useState<Slot | null>(null);
   const [details, setDetails] = useState<Details>({ name: "", instagram: "", whatsapp: "", email: "", purpose: "", referenceLink: "" });
   const [terms, setTerms] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,9 +111,43 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const optionsForSetting = config.locationOptions.filter((l) => l.setting === locSetting);
 
   const quote = useMemo(
-    () => calculatePrice(config, { serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null }),
-    [config, serviceId, durationId, locationOptionId, zoneId, locationOption],
+    () => calculatePrice(config, {
+      serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
+      couponCode: appliedCoupon?.code ?? null, couponDiscountPercent: appliedCoupon?.discountPercent ?? null,
+    }),
+    [config, serviceId, durationId, locationOptionId, zoneId, locationOption, appliedCoupon],
   );
+
+  // A coupon was checked against one specific service — picking a different
+  // one invalidates it, so don't carry a stale discount into a new selection.
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    setCouponInput("");
+  }, [serviceId]);
+
+  async function applyCoupon() {
+    if (!serviceId || !couponInput.trim()) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponInput, serviceId }),
+      });
+      const data = await res.json();
+      if (data.ok) { setAppliedCoupon({ code: data.code, discountPercent: data.discountPercent }); setCouponError(null); }
+      else { setAppliedCoupon(null); setCouponError(data.error ?? "That coupon code isn't valid."); }
+    } catch {
+      setCouponError("Something went wrong. Try again.");
+    }
+    setCouponChecking(false);
+  }
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
 
   // Calendar: the month currently in view, independent of the selected date.
   const today = useMemo(() => zonedDateStr(new Date(), settings.timezone), [settings.timezone]);
@@ -168,14 +206,24 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
       .catch(() => setSlotsForDay([]));
   }, [dateStr, duration]);
 
-  // Authoritative price check when reaching Review.
+  // Authoritative price check when reaching Review — also re-validates
+  // whichever coupon is currently applied, in case it expired in the meantime.
   useEffect(() => {
     if (step !== "review") return;
     fetch("/api/quote", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null }),
-    }).then((r) => r.json()).then(setReviewQuote).catch(() => setReviewQuote(null));
-  }, [step, serviceId, durationId, locationOptionId, zoneId, locationOption]);
+      body: JSON.stringify({
+        serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
+        couponCode: appliedCoupon?.code ?? null,
+      }),
+    }).then((r) => r.json()).then((data) => {
+      setReviewQuote(data);
+      if (appliedCoupon && data.couponError) {
+        setAppliedCoupon(null);
+        setCouponError(data.couponError);
+      }
+    }).catch(() => setReviewQuote(null));
+  }, [step, serviceId, durationId, locationOptionId, zoneId, locationOption, appliedCoupon]);
 
   const idx = STEPS.indexOf(step);
   const goBack = () => setStep(STEPS[Math.max(idx - 1, 0)]);
@@ -199,6 +247,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const buildHoldPayload = () => ({
     serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
     date: dateStr, slotStart: slot?.start, slotEnd: slot?.end, address: address || null,
+    couponCode: appliedCoupon?.code ?? null,
     customer: {
       fullName: details.name, instagram: details.instagram || null, whatsapp: details.whatsapp,
       email: details.email, purpose: details.purpose || null, referenceLink: details.referenceLink || null,
@@ -436,9 +485,37 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               <div className="text-muted">{locationSummary}</div>
             </div>
 
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-ok">Coupon <b>{appliedCoupon.code}</b> applied &mdash; {appliedCoupon.discountPercent}% off</span>
+                  <button type="button" onClick={removeCoupon} className="shrink-0 text-xs text-muted underline underline-offset-2">Remove</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="Coupon code" className="input flex-1"
+                  />
+                  <button
+                    type="button" onClick={applyCoupon} disabled={couponChecking || !couponInput.trim()}
+                    className="btn btn-quiet shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    {couponChecking ? "Checking…" : "Apply"}
+                  </button>
+                </div>
+              )}
+              {couponError && <p className="mt-2 text-xs text-danger">{couponError}</p>}
+            </div>
+
             <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-5 text-sm">
               {finalQuote.lines.map((l, i) => (
-                <div key={i} className="flex justify-between gap-3"><span className="text-muted">{l.label}</span><span>{formatINR(l.amount_paise)}</span></div>
+                <div key={i} className="flex justify-between gap-3">
+                  <span className={l.kind === "discount" ? "text-ok" : "text-muted"}>{l.label}</span>
+                  <span className={l.kind === "discount" ? "text-ok" : ""}>
+                    {l.amount_paise < 0 ? `-${formatINR(-l.amount_paise)}` : formatINR(l.amount_paise)}
+                  </span>
+                </div>
               ))}
               <div className="h-px bg-line" />
               <div className="flex items-baseline justify-between"><span>Total</span><span className="font-display text-2xl">{formatINR(finalQuote.total_paise)}</span></div>

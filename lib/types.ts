@@ -95,6 +95,20 @@ export type Product = {
   sort: number;
 };
 
+// ─────────────────────────────────────────────────────────────
+// Discount coupons
+// ─────────────────────────────────────────────────────────────
+export type Coupon = {
+  id: string;
+  code: string;
+  discount_percent: number;
+  service_ids: string[];
+  valid_from: string;
+  valid_until: string;
+  active: boolean;
+  times_used: number;
+};
+
 export type BookingConfig = {
   settings: Settings;
   services: Service[];
