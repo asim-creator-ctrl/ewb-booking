@@ -22,6 +22,8 @@ export type Settings = {
   hero_image_position_x: number;
   hero_image_position_y: number;
   hero_image_zoom: number;
+  download_expiry_minutes: number;
+  download_max_downloads: number;
 };
 
 export type Service = {
@@ -67,6 +69,28 @@ export type Inclusion = {
   id: string;
   text: string;
   is_included: boolean;
+  active: boolean;
+  sort: number;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Digital products (Phase 2)
+// ─────────────────────────────────────────────────────────────
+export type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  badge: string | null;
+  short_description: string | null;
+  description: string | null;
+  includes: string[];
+  price_paise: number;
+  compare_at_price_paise: number | null;
+  thumbnail_url: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_size_bytes: number | null;
+  featured: boolean;
   active: boolean;
   sort: number;
 };
