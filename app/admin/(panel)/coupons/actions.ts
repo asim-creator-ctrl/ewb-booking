@@ -37,6 +37,7 @@ const CouponSchema = z.object({
   valid_from_date: dateOnly,
   valid_until_date: dateOnly,
   active: checkbox,
+  auto_apply: checkbox,
 }).refine((d) => d.valid_until_date >= d.valid_from_date, { message: "end date must be on or after the start date", path: ["valid_until_date"] });
 
 async function dateRangeUtc(supabase: Awaited<ReturnType<typeof requireAdmin>>["supabase"], fromDate: string, untilDate: string) {
