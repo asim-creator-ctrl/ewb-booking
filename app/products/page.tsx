@@ -28,8 +28,8 @@ export default async function ProductsPage() {
             <Link
               key={p.id}
               href={`/products/${p.slug}`}
-              className={`overflow-hidden rounded-2xl border bg-surface transition-colors hover:border-safelight/60 ${
-                p.featured ? "border-safelight/55" : "border-line"
+              className={`overflow-hidden rounded-2xl border bg-surface/60 shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:border-safelight/60 ${
+                p.featured ? "border-safelight/55" : "border-line/60"
               }`}
             >
               <div className="relative h-36 bg-gradient-to-br from-raise to-surface">
