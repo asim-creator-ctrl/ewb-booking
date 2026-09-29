@@ -3,6 +3,7 @@ import type { Settings } from "@/lib/types";
 import { Field, Flash, PageHead, Section, Toggle, type Search } from "@/components/ui";
 import { saveSettings } from "../actions";
 import { HeroImageUploader } from "./HeroImageUploader";
+import { BgImageUploader } from "./BgImageUploader";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Search }) {
   const { supabase } = await requireAdmin();
@@ -21,6 +22,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
           currentPositionY={s.hero_image_position_y}
           currentZoom={s.hero_image_zoom}
         />
+      </Section>
+
+      <Section title="App background" hint="The fixed backdrop behind every screen, glowing through the glass cards and tabs. Leave empty for the built-in gradient in your brand colours, or upload your own photo — JPG, PNG or WEBP, up to 5MB.">
+        <BgImageUploader currentUrl={s.bg_image_url} />
       </Section>
 
       <form action={saveSettings} className="max-w-3xl">
