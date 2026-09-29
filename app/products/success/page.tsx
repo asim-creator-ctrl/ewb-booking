@@ -36,7 +36,7 @@ export default async function PurchaseSuccessPage({ searchParams }: { searchPara
           </div>
           <h1 className="mt-4 font-display text-2xl">Purchase confirmed</h1>
 
-          <div className="mt-6 flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left">
+          <div className="mt-6 flex w-full items-center gap-3 rounded-2xl border border-line/60 bg-surface/60 p-3.5 text-left shadow-lg shadow-black/20 backdrop-blur-xl">
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-raise">
               {info.thumbnailUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
