@@ -44,7 +44,7 @@ export default async function Home() {
           <Link
             key={card.href}
             href={card.href}
-            className="flex items-center gap-4 rounded-2xl border border-line bg-surface px-5 py-5 transition-colors hover:border-safelight/60 hover:bg-raise"
+            className="flex items-center gap-4 rounded-2xl border border-line/60 bg-surface/60 px-5 py-5 shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:border-safelight/60 hover:bg-raise"
           >
             <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-line bg-ground text-safelight">
               {card.icon}
