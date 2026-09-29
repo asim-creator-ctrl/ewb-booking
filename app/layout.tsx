@@ -15,7 +15,21 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#16120e", width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Only field this layout needs from settings — a single-column read on every
+// request, same "always live, no cache" rule as the rest of the app: an
+// admin's background change shows up on the very next page load.
+export const dynamic = "force-dynamic";
+
+async function getBgImageUrl(): Promise<string | null> {
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const { data } = await db.from("settings").select("bg_image_url").eq("id", 1).single();
+  return data?.bg_image_url ?? null;
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const bgImageUrl = await getBgImageUrl();
+
   return (
     <html lang="en">
       <head>
@@ -23,10 +37,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Gloock&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700;800&display=swap"
         />
       </head>
       <body className="min-h-dvh">
+        <div
+          className="app-bg"
+          aria-hidden
+          style={bgImageUrl ? { backgroundImage: `url(${bgImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        />
         {children}
         <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
         <Script id="ga4-init" strategy="afterInteractive">
