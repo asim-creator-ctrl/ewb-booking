@@ -80,7 +80,12 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const [details, setDetails] = useState<Details>({ name: "", instagram: "", whatsapp: "", email: "", purpose: "", referenceLink: "" });
   const [terms, setTerms] = useState(false);
   const [couponInput, setCouponInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
+  // The auto-apply offer isn't its own state — it's derived fresh from
+  // offersByService.get(serviceId) below — except for this one flag, set
+  // when the server says a previously-shown offer no longer checks out
+  // (expired, turned off) so a stale badge doesn't sneak a bad discount in.
+  const [offerDismissed, setOfferDismissed] = useState(false);
+  const [manualCoupon, setManualCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -114,25 +119,32 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const zone = config.zones.find((z) => z.id === zoneId) ?? null;
   const optionsForSetting = config.locationOptions.filter((l) => l.setting === locSetting);
   const offersByService = useMemo(() => new Map(config.offers.map((o) => [o.service_id, o])), [config.offers]);
+  // The service's auto-apply offer, if any — derived, not stored, so
+  // switching services always shows the right badge with no extra state.
+  // offerDismissed only kicks in if the server's re-check on Review says
+  // this particular offer no longer holds up.
+  const offer = serviceId ? offersByService.get(serviceId) : undefined;
+  const activeOffer = offerDismissed ? undefined : offer;
 
   const quote = useMemo(
     () => calculatePrice(config, {
       serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
-      couponCode: appliedCoupon?.code ?? null, couponDiscountPercent: appliedCoupon?.discountPercent ?? null,
+      offerCode: activeOffer?.code ?? null, offerDiscountPercent: activeOffer?.discount_percent ?? null,
+      couponCode: manualCoupon?.code ?? null, couponDiscountPercent: manualCoupon?.discountPercent ?? null,
     }),
-    [config, serviceId, durationId, locationOptionId, zoneId, locationOption, appliedCoupon],
+    [config, serviceId, durationId, locationOptionId, zoneId, locationOption, activeOffer, manualCoupon],
   );
 
-  // A coupon was checked against one specific service — picking a different
-  // one invalidates it, so don't carry a stale discount into a new selection.
-  // If the newly picked service has an auto-apply offer, it takes over here
-  // with no typing needed — the same badge the customer just saw on its card.
+  // A typed coupon was checked against one specific service — picking a
+  // different one invalidates it, so don't carry a stale discount into a
+  // new selection. The auto-apply offer doesn't need resetting here: it's
+  // recomputed above from offersByService.get(serviceId) on every render.
   useEffect(() => {
-    const offer = serviceId ? offersByService.get(serviceId) : undefined;
-    setAppliedCoupon(offer ? { code: offer.code, discountPercent: offer.discount_percent } : null);
+    setManualCoupon(null);
+    setOfferDismissed(false);
     setCouponError(null);
     setCouponInput("");
-  }, [serviceId, offersByService]);
+  }, [serviceId]);
 
   async function applyCoupon() {
     if (!serviceId || !couponInput.trim()) return;
@@ -141,18 +153,18 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
     try {
       const res = await fetch("/api/coupons/validate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: couponInput, serviceId }),
+        body: JSON.stringify({ code: couponInput, serviceId, excludeCode: activeOffer?.code ?? null }),
       });
       const data = await res.json();
-      if (data.ok) { setAppliedCoupon({ code: data.code, discountPercent: data.discountPercent }); setCouponError(null); }
-      else { setAppliedCoupon(null); setCouponError(data.error ?? "That coupon code isn't valid."); }
+      if (data.ok) { setManualCoupon({ code: data.code, discountPercent: data.discountPercent }); setCouponError(null); setCouponInput(""); }
+      else { setManualCoupon(null); setCouponError(data.error ?? "That coupon code isn't valid."); }
     } catch {
       setCouponError("Something went wrong. Try again.");
     }
     setCouponChecking(false);
   }
   function removeCoupon() {
-    setAppliedCoupon(null);
+    setManualCoupon(null);
     setCouponInput("");
     setCouponError(null);
   }
@@ -215,23 +227,25 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   }, [dateStr, duration]);
 
   // Authoritative price check when reaching Review — also re-validates
-  // whichever coupon is currently applied, in case it expired in the meantime.
+  // whichever offer and coupon are currently applied, in case either
+  // expired in the meantime.
   useEffect(() => {
     if (step !== "review") return;
     fetch("/api/quote", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
-        couponCode: appliedCoupon?.code ?? null,
+        offerCode: activeOffer?.code ?? null, couponCode: manualCoupon?.code ?? null,
       }),
     }).then((r) => r.json()).then((data) => {
       setReviewQuote(data);
-      if (appliedCoupon && data.couponError) {
-        setAppliedCoupon(null);
+      if (activeOffer && data.offerError) setOfferDismissed(true);
+      if (manualCoupon && data.couponError) {
+        setManualCoupon(null);
         setCouponError(data.couponError);
       }
     }).catch(() => setReviewQuote(null));
-  }, [step, serviceId, durationId, locationOptionId, zoneId, locationOption, appliedCoupon]);
+  }, [step, serviceId, durationId, locationOptionId, zoneId, locationOption, activeOffer, manualCoupon]);
 
   const idx = STEPS.indexOf(step);
   const goBack = () => setStep(STEPS[Math.max(idx - 1, 0)]);
@@ -255,7 +269,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
   const buildHoldPayload = () => ({
     serviceId, durationId, locationOptionId, zoneId: locationOption?.uses_zone ? zoneId : null,
     date: dateStr, slotStart: slot?.start, slotEnd: slot?.end, address: address || null,
-    couponCode: appliedCoupon?.code ?? null,
+    offerCode: activeOffer?.code ?? null, couponCode: manualCoupon?.code ?? null,
     customer: {
       fullName: details.name, instagram: details.instagram || null, whatsapp: details.whatsapp,
       email: details.email, purpose: details.purpose || null, referenceLink: details.referenceLink || null,
@@ -514,27 +528,35 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               <div className="text-muted">{locationSummary}</div>
             </div>
 
-            <div className="rounded-2xl border border-line bg-surface p-4">
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-ok">Coupon <b>{appliedCoupon.code}</b> applied &mdash; {appliedCoupon.discountPercent}% off</span>
-                  <button type="button" onClick={removeCoupon} className="shrink-0 text-xs text-muted underline underline-offset-2">Remove</button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
-                    placeholder="Coupon code" className="input flex-1"
-                  />
-                  <button
-                    type="button" onClick={applyCoupon} disabled={couponChecking || !couponInput.trim()}
-                    className="btn btn-quiet shrink-0 disabled:pointer-events-none disabled:opacity-40"
-                  >
-                    {couponChecking ? "Checking…" : "Apply"}
-                  </button>
+            <div className="flex flex-col gap-3">
+              {activeOffer && (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-safelight/40 bg-safelight/10 p-4 text-sm">
+                  <span className="text-ok">Offer <b>{activeOffer.code}</b> applied &mdash; {activeOffer.discount_percent}% off</span>
+                  <span className="shrink-0 rounded-full bg-safelight/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-safelight">Auto</span>
                 </div>
               )}
-              {couponError && <p className="mt-2 text-xs text-danger">{couponError}</p>}
+              <div className="rounded-2xl border border-line bg-surface p-4">
+                {manualCoupon ? (
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-ok">Coupon <b>{manualCoupon.code}</b> applied &mdash; {manualCoupon.discountPercent}% off</span>
+                    <button type="button" onClick={removeCoupon} className="shrink-0 text-xs text-muted underline underline-offset-2">Remove</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder={activeOffer ? "Have another coupon? Add it too" : "Coupon code"} className="input flex-1"
+                    />
+                    <button
+                      type="button" onClick={applyCoupon} disabled={couponChecking || !couponInput.trim()}
+                      className="btn btn-quiet shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      {couponChecking ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {couponError && <p className="mt-2 text-xs text-danger">{couponError}</p>}
+              </div>
             </div>
 
             <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-5 text-sm">

@@ -12,10 +12,17 @@ export type CouponCheck =
   | { ok: true; code: string; discountPercent: number }
   | { ok: false; error: string };
 
-export async function validateCoupon(db: Db, rawCode: string, serviceId: string | null | undefined): Promise<CouponCheck> {
+export async function validateCoupon(
+  db: Db, rawCode: string, serviceId: string | null | undefined,
+  /** Pass the code already applied as an auto-offer so the same coupon can't be typed in on top of itself. */
+  excludeCode?: string | null,
+): Promise<CouponCheck> {
   const code = rawCode.trim().toUpperCase();
   if (!code) return { ok: false, error: "Enter a coupon code." };
   if (!serviceId) return { ok: false, error: "Choose a shoot type first." };
+  if (excludeCode && code === excludeCode.trim().toUpperCase()) {
+    return { ok: false, error: "That offer's already applied automatically." };
+  }
 
   const { data: coupon } = await db.from("coupons")
     .select("code, discount_percent, service_ids, valid_from, valid_until, active")
