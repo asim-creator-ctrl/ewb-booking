@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
-/* Darkroom palette: warm dark ground, paper text, one safelight-amber accent. */
+/* Darkroom palette: warm dark ground, paper text, one safelight-amber accent.
+   Surface/raise are translucent on purpose — see the glass rules below, which
+   is what lets the fixed app-bg layer show through every card and tab. */
 @theme {
   --color-ground: #16120e;
-  --color-surface: #1f1a15;
-  --color-raise: #29221c;
+  --color-surface: rgb(31 26 21 / 62%);
+  --color-raise: rgb(41 34 28 / 68%);
   --color-line: #3b332b;
   --color-paper: #f0e8db;
   --color-muted: #a0968a;
@@ -12,12 +14,62 @@
   --color-danger: #e5735f;
   --color-ok: #9dbb84;
 
+  /* One modern grotesk for everything — headings included. No serif in this
+     app; "font-display" is a weight/tracking treatment of the same face. */
   --font-sans: "Familjen Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Gloock", Georgia, "Times New Roman", serif;
+  --font-display: "Familjen Grotesk", ui-sans-serif, system-ui, sans-serif;
 }
 
 html { background: var(--color-ground); color: var(--color-paper); color-scheme: dark; }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+body { position: relative; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+.font-display { font-weight: 800; letter-spacing: -0.015em; }
+
+/* Frosted-glass surfaces: every card/tab painted with bg-surface or bg-raise
+   picks this up automatically, no per-component changes needed. Safari needs
+   the -webkit- prefix; backdrop-filter is skipped gracefully where it isn't
+   supported (the translucent color still reads fine on its own). */
+.bg-surface, .bg-raise {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* ── App-wide background ──────────────────────────────────────
+   Fixed behind every screen. Default is a CSS-only glow in the brand's own
+   colours (no image to ship or load); an admin-uploaded photo overrides
+   background-image inline and this layer's grain/scrim sit on top of it too,
+   so a real photo gets the same legibility treatment as the default. */
+/* No background-size/position here on purpose: the two radial-gradients
+   already set their own size (the "1100px 900px" etc. arguments) and
+   position (68% 24% etc.) — background-size:cover would instead scale that
+   whole gradient "image" to fill the screen, blowing the glow out past its
+   fade and leaving only flat colour visible. An admin-uploaded photo sets
+   its own background-size:cover inline (see layout.tsx), which is correct
+   for a photo since it has no intrinsic size logic of its own. */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--color-ground);
+  background-image:
+    radial-gradient(1100px 900px at 68% 24%, color-mix(in srgb, var(--color-safelight) 55%, transparent), transparent 60%),
+    radial-gradient(900px 800px at 14% 78%, color-mix(in srgb, var(--color-raise) 85%, transparent), transparent 65%);
+  background-repeat: no-repeat;
+}
+.app-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 15%) 0%, rgb(0 0 0 / 4%) 32%, rgb(0 0 0 / 38%) 100%);
+}
 
 :focus-visible { outline: 2px solid var(--color-safelight); outline-offset: 2px; border-radius: 4px; }
 

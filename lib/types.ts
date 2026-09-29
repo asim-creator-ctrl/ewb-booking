@@ -22,6 +22,7 @@ export type Settings = {
   hero_image_position_x: number;
   hero_image_position_y: number;
   hero_image_zoom: number;
+  bg_image_url: string | null;
   download_expiry_minutes: number;
   download_max_downloads: number;
 };
