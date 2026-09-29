@@ -106,13 +106,42 @@ describe("calculatePrice", () => {
     });
     // rawSubtotal 5,500 → 20% off = 1,100 discount → subtotal 4,400
     expect(q.discount_paise).toBe(110000);
-    expect(q.discount_percent).toBe(20);
+    expect(q.coupon_discount_percent).toBe(20);
     expect(q.coupon_code).toBe("DIWALI20");
     expect(q.subtotal_paise).toBe(440000);
     expect(q.total_paise).toBe(440000);
     expect(q.lines.find((l) => l.kind === "discount")).toEqual({
       kind: "discount", label: "Coupon DIWALI20 (-20%)", amount_paise: -110000,
     });
+  });
+
+  it("stacks an auto-apply offer with a manually typed coupon", () => {
+    const q = calculatePrice(config, {
+      serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "south",
+      offerCode: "FESTIVE", offerDiscountPercent: 15,
+      couponCode: "EXTRA5", couponDiscountPercent: 5,
+    });
+    // rawSubtotal 5,500 → 15% off (825) + 5% off (275) = 1,100 combined → subtotal 4,400
+    expect(q.offer_code).toBe("FESTIVE");
+    expect(q.offer_discount_percent).toBe(15);
+    expect(q.coupon_code).toBe("EXTRA5");
+    expect(q.coupon_discount_percent).toBe(5);
+    expect(q.discount_paise).toBe(110000);
+    expect(q.subtotal_paise).toBe(440000);
+    expect(q.lines.filter((l) => l.kind === "discount")).toEqual([
+      { kind: "discount", label: "Offer FESTIVE (-15%)", amount_paise: -82500 },
+      { kind: "discount", label: "Coupon EXTRA5 (-5%)", amount_paise: -27500 },
+    ]);
+  });
+
+  it("caps a stacked discount so the subtotal never goes negative", () => {
+    const q = calculatePrice(config, {
+      serviceId: "photo", durationId: "p1", locationOptionId: "out", zoneId: "south",
+      offerCode: "HUGE", offerDiscountPercent: 70,
+      couponCode: "MORE", couponDiscountPercent: 60,
+    });
+    expect(q.subtotal_paise).toBe(0);
+    expect(q.discount_paise).toBe(550000);
   });
 
   it("taxes the discounted subtotal, not the raw one", () => {
