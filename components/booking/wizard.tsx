@@ -518,16 +518,18 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
 
         {step === "review" && slot && service && duration && dateStr && (
           <div className="flex flex-col gap-5">
-            <p className="rounded-lg bg-safelight/10 px-3.5 py-3 text-sm leading-relaxed text-safelight">
-              {razorpayConfigured
-                ? "Your slot is held for a few minutes once you start paying — plenty of time to complete checkout."
-                : "This time isn't reserved yet — message me now to lock it in before someone else picks it."}
-            </p>
-            <h1 className="font-display text-3xl leading-tight">Review and send</h1>
-            <div className="flex flex-col gap-1 rounded-2xl border border-line/60 bg-surface/60 p-4 text-sm shadow-lg shadow-black/20 backdrop-blur-xl">
-              <div className="font-semibold">{service.name} · {formatDuration(duration.minutes)}</div>
-              <div className="text-muted">{formatLocalDateLong(dateStr, settings.timezone)}, {formatLocalTime(slot.start, settings.timezone)} – {formatLocalTime(slot.end, settings.timezone)}</div>
-              <div className="text-muted">{locationSummary}</div>
+            <div className="flex flex-col gap-4 rounded-2xl border border-line/60 bg-surface/60 p-5 shadow-lg shadow-black/20 backdrop-blur-xl">
+              <p className="text-sm leading-relaxed text-safelight">
+                {razorpayConfigured
+                  ? "Your slot is held for a few minutes once you start paying — plenty of time to complete checkout."
+                  : "This time isn't reserved yet — message me now to lock it in before someone else picks it."}
+              </p>
+              <h1 className="font-display text-3xl leading-tight">Review and send</h1>
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="font-semibold">{service.name} · {formatDuration(duration.minutes)}</div>
+                <div className="text-muted">{formatLocalDateLong(dateStr, settings.timezone)}, {formatLocalTime(slot.start, settings.timezone)} – {formatLocalTime(slot.end, settings.timezone)}</div>
+                <div className="text-muted">{locationSummary}</div>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
