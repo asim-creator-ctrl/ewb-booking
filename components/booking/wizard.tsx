@@ -503,14 +503,16 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
         {step === "details" && (
           <div className="flex flex-col gap-4">
             <h1 className="font-display text-3xl leading-tight">About you</h1>
-            <Field label="Full name"><input value={details.name} onChange={(e) => setDetails({ ...details, name: e.target.value })} autoComplete="name" className="input" /></Field>
-            <Field label="Instagram"><input value={details.instagram} onChange={(e) => setDetails({ ...details, instagram: e.target.value })} placeholder="@yourhandle" className="input" /></Field>
-            <Field label="WhatsApp number"><input value={details.whatsapp} onChange={(e) => setDetails({ ...details, whatsapp: e.target.value })} inputMode="tel" placeholder="+91" className="input" /></Field>
-            <Field label="Email"><input type="email" value={details.email} onChange={(e) => setDetails({ ...details, email: e.target.value })} autoComplete="email" className="input" /></Field>
-            <Field label="Tell me briefly what you want to shoot">
-              <textarea value={details.purpose} onChange={(e) => setDetails({ ...details, purpose: e.target.value })} rows={3} className="input" />
-            </Field>
-            <Field label="Reference link (optional)"><input value={details.referenceLink} onChange={(e) => setDetails({ ...details, referenceLink: e.target.value })} placeholder="Instagram post, Pinterest…" className="input" /></Field>
+            <div className="flex flex-col gap-4 rounded-2xl border border-line/60 bg-surface/60 p-5 shadow-lg shadow-black/20 backdrop-blur-xl">
+              <Field label="Full name"><input value={details.name} onChange={(e) => setDetails({ ...details, name: e.target.value })} autoComplete="name" className="input" /></Field>
+              <Field label="Instagram"><input value={details.instagram} onChange={(e) => setDetails({ ...details, instagram: e.target.value })} placeholder="@yourhandle" className="input" /></Field>
+              <Field label="WhatsApp number"><input value={details.whatsapp} onChange={(e) => setDetails({ ...details, whatsapp: e.target.value })} inputMode="tel" placeholder="+91" className="input" /></Field>
+              <Field label="Email"><input type="email" value={details.email} onChange={(e) => setDetails({ ...details, email: e.target.value })} autoComplete="email" className="input" /></Field>
+              <Field label="Tell me briefly what you want to shoot">
+                <textarea value={details.purpose} onChange={(e) => setDetails({ ...details, purpose: e.target.value })} rows={3} className="input" />
+              </Field>
+              <Field label="Reference link (optional)"><input value={details.referenceLink} onChange={(e) => setDetails({ ...details, referenceLink: e.target.value })} placeholder="Instagram post, Pinterest…" className="input" /></Field>
+            </div>
           </div>
         )}
 
@@ -522,7 +524,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                 : "This time isn't reserved yet — message me now to lock it in before someone else picks it."}
             </p>
             <h1 className="font-display text-3xl leading-tight">Review and send</h1>
-            <div className="flex flex-col gap-1 text-sm">
+            <div className="flex flex-col gap-1 rounded-2xl border border-line/60 bg-surface/60 p-4 text-sm shadow-lg shadow-black/20 backdrop-blur-xl">
               <div className="font-semibold">{service.name} · {formatDuration(duration.minutes)}</div>
               <div className="text-muted">{formatLocalDateLong(dateStr, settings.timezone)}, {formatLocalTime(slot.start, settings.timezone)} – {formatLocalTime(slot.end, settings.timezone)}</div>
               <div className="text-muted">{locationSummary}</div>
