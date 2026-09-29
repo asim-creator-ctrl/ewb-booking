@@ -32,7 +32,7 @@ export default async function ShootsPage() {
         <Link href="/" className="text-sm text-muted hover:text-paper">&larr; {settings.brand_name}</Link>
       </div>
 
-      <div className="h-64 overflow-hidden rounded-sm border border-line bg-surface">
+      <div className="h-64 overflow-hidden rounded-sm border border-line/60 bg-surface/60 shadow-lg shadow-black/20 backdrop-blur-xl">
         {settings.hero_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -63,7 +63,7 @@ export default async function ShootsPage() {
       </div>
 
       {fromPaise !== null && (
-        <div className="flex flex-col gap-1 rounded-2xl border border-line bg-surface p-5">
+        <div className="flex flex-col gap-1 rounded-2xl border border-line/60 bg-surface/60 p-5 shadow-lg shadow-black/20 backdrop-blur-xl">
           <div className="text-sm text-muted">Shoots from</div>
           <div className="font-display text-4xl">{formatINR(fromPaise)}</div>
           <div className="text-sm text-muted">{settings.advance_percent}% advance confirms your date. The rest is paid after the shoot.</div>
@@ -78,7 +78,7 @@ export default async function ShootsPage() {
               const ds = durations.filter((d) => d.service_id === s.id);
               if (ds.length === 0) return null;
               return (
-                <div key={s.id} className="rounded-xl border border-line bg-surface p-4">
+                <div key={s.id} className="rounded-xl border border-line/60 bg-surface/60 p-4 shadow-lg shadow-black/20 backdrop-blur-xl">
                   <div className="text-sm font-semibold">{s.name}</div>
                   <div className="mt-2 flex flex-col gap-1.5">
                     {ds.map((d) => (
@@ -111,7 +111,7 @@ export default async function ShootsPage() {
 
       <div className="flex flex-col gap-4">
         <h2 className="text-sm font-semibold">Questions</h2>
-        <div className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface">
+        <div className="flex flex-col divide-y divide-line rounded-xl border border-line/60 bg-surface/60 shadow-lg shadow-black/20 backdrop-blur-xl">
           {faqs.map((f, i) => (
             <details key={i} className="group px-4 py-3">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium">
@@ -138,7 +138,7 @@ export default async function ShootsPage() {
         {settings.booking_enabled ? (
           <Link href="/book" className="btn btn-primary block w-full text-center text-base">Check availability</Link>
         ) : (
-          <div className="rounded-xl border border-line px-4 py-3 text-center text-sm text-muted">Not taking new bookings right now — check back soon.</div>
+          <div className="rounded-xl border border-line/60 bg-surface/60 px-4 py-3 text-center text-sm text-muted shadow-lg shadow-black/20 backdrop-blur-xl">Not taking new bookings right now — check back soon.</div>
         )}
       </div>
     </main>
