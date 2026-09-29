@@ -46,8 +46,8 @@ function Pill({ active, disabled, onClick, children, className = "" }: {
   return (
     <button
       type="button" disabled={disabled} onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        active ? "border-safelight bg-safelight/15 text-safelight" : "border-line text-paper hover:border-muted"
+      className={`rounded-full border px-3 py-1.5 text-sm shadow-lg shadow-black/20 backdrop-blur-xl transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "border-safelight bg-safelight/15 text-safelight" : "border-line/60 bg-surface/60 text-paper hover:border-muted"
       } ${className}`}
     >
       {children}
@@ -308,7 +308,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                 const pct = offer && Number.isInteger(offer.discount_percent) ? offer.discount_percent : offer?.discount_percent.toFixed(1);
                 return (
                   <button key={s.id} type="button" onClick={() => { setServiceId(s.id); setDurationId(null); advanceTo("duration"); }}
-                    className={`rounded-2xl border p-5 text-left transition-colors ${serviceId === s.id ? "border-safelight bg-safelight/10" : "border-line hover:border-muted"}`}>
+                    className={`rounded-2xl border p-5 text-left shadow-lg shadow-black/20 backdrop-blur-xl transition-colors ${serviceId === s.id ? "border-safelight bg-safelight/10" : "border-line/60 bg-surface/60 hover:border-muted"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-lg font-semibold">{s.name}</div>
                       {offer && (
@@ -343,7 +343,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
             <div className="flex flex-col gap-2.5">
               {durationsForService.map((d: ServiceDuration) => (
                 <button key={d.id} type="button" onClick={() => { setDurationId(d.id); advanceTo("date"); }}
-                  className={`flex min-h-16 items-center justify-between rounded-2xl border px-5 text-base ${durationId === d.id ? "border-safelight bg-safelight/10" : "border-line hover:border-muted"}`}>
+                  className={`flex min-h-16 items-center justify-between rounded-2xl border px-5 text-base shadow-lg shadow-black/20 backdrop-blur-xl ${durationId === d.id ? "border-safelight bg-safelight/10" : "border-line/60 bg-surface/60 hover:border-muted"}`}>
                   <span className="font-semibold">{formatDuration(d.minutes)}</span>
                   <span>{formatINR(d.price_paise)}</span>
                 </button>
@@ -452,7 +452,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                 {optionsForSetting.length > 1 && <div className="text-sm text-muted">Where exactly?</div>}
                 {optionsForSetting.map((l: LocationOption) => (
                   <button key={l.id} type="button" onClick={() => { setLocationOptionId(l.id); setZoneId(null); if (!l.uses_zone) advanceTo("details"); }}
-                    className={`min-h-13 rounded-xl border px-4 py-3 text-left text-sm ${locationOptionId === l.id ? "border-safelight bg-safelight/10" : "border-line"}`}>
+                    className={`min-h-13 rounded-xl border px-4 py-3 text-left text-sm shadow-lg shadow-black/20 backdrop-blur-xl ${locationOptionId === l.id ? "border-safelight bg-safelight/10" : "border-line/60 bg-surface/60"}`}>
                     {l.label}
                   </button>
                 ))}
@@ -468,7 +468,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                 <div className="text-sm text-muted">Which area?</div>
                 {config.zones.map((z) => (
                   <button key={z.id} type="button" onClick={() => { setZoneId(z.id); if (!z.requires_quote) advanceTo("details"); }}
-                    className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left ${zoneId === z.id ? "border-safelight bg-safelight/10" : "border-line"}`}>
+                    className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left shadow-lg shadow-black/20 backdrop-blur-xl ${zoneId === z.id ? "border-safelight bg-safelight/10" : "border-line/60 bg-surface/60"}`}>
                     <span className="flex flex-col">
                       <span className="text-sm">{z.name}</span>
                       {z.description && <span className="text-xs text-muted">{z.description}</span>}
@@ -535,7 +535,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
                   <span className="shrink-0 rounded-full bg-safelight/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-safelight">Auto</span>
                 </div>
               )}
-              <div className="rounded-2xl border border-line bg-surface p-4">
+              <div className="rounded-2xl border border-line/60 bg-surface/60 p-4 shadow-lg shadow-black/20 backdrop-blur-xl">
                 {manualCoupon ? (
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-ok">Coupon <b>{manualCoupon.code}</b> applied &mdash; {manualCoupon.discountPercent}% off</span>
@@ -559,7 +559,7 @@ export function Wizard({ initialConfig, razorpayConfigured }: { initialConfig: B
               </div>
             </div>
 
-            <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-5 text-sm">
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-line/60 bg-surface/60 p-5 text-sm shadow-lg shadow-black/20 backdrop-blur-xl">
               {finalQuote.lines.map((l, i) => (
                 <div key={i} className="flex justify-between gap-3">
                   <span className={l.kind === "discount" ? "text-ok" : "text-muted"}>{l.label}</span>
