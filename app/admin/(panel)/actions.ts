@@ -147,6 +147,42 @@ export async function removeHeroImage(fd: FormData) {
   back("/admin/settings", "ok", "Homepage photo removed.");
 }
 
+// ── app background ──────────────────────────────────────────
+// The fixed backdrop behind every page. Same upload path as the homepage
+// photo (site-assets bucket, service client). Null means: fall back to the
+// built-in CSS glow — no photo required.
+export async function uploadBgImage(fd: FormData) {
+  const { user } = await requireAdmin();
+  const photo = fd.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) back("/admin/settings", "error", "Choose an image first.");
+  if (!ALLOWED_PHOTO_TYPES.has(photo.type)) back("/admin/settings", "error", "Use a JPG, PNG or WEBP image.");
+  if (photo.size > MAX_PHOTO_BYTES) back("/admin/settings", "error", "That image is too large — keep it under 5MB.");
+
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const ext = photo.type.split("/")[1];
+  const path = `bg-${Date.now()}.${ext}`;
+  const { error: uploadErr } = await db.storage.from("site-assets").upload(path, photo, { contentType: photo.type, upsert: false });
+  if (uploadErr) back("/admin/settings", "error", "Could not upload that image. Try again.");
+
+  const { data: pub } = db.storage.from("site-assets").getPublicUrl(path);
+  const { error } = await db.from("settings").update({ bg_image_url: pub.publicUrl }).eq("id", 1);
+  if (error) back("/admin/settings", "error", "Uploaded, but couldn't save it. Try again.");
+
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { bg_image_url: pub.publicUrl } });
+  back("/admin/settings", "ok", "Background updated — live on every page now.");
+}
+
+export async function removeBgImage(fd: FormData) {
+  const { user } = await requireAdmin();
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const db = createServiceClient();
+  const { error } = await db.from("settings").update({ bg_image_url: null }).eq("id", 1);
+  if (error) back("/admin/settings", "error", "Could not remove the background.");
+  await db.from("audit_logs").insert({ actor: user.id, action: "update", entity: "settings", after: { bg_image_url: null } });
+  back("/admin/settings", "ok", "Back to the built-in background.");
+}
+
 // ── services ─────────────────────────────────────────────────
 const ServiceSchema = z.object({ name: text(80), description: optText(500), active: checkbox, sort: int(0, 999) });
 
