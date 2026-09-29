@@ -19,7 +19,10 @@ const nav = [
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const { user } = await requireAdmin();
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
+    // bg-ground (opaque) on purpose: the site-wide glass background is for
+    // the customer-facing pages, not the admin panel — tables and forms here
+    // stay on a plain, fully readable surface.
+    <div className="min-h-dvh bg-ground md:grid md:grid-cols-[240px_1fr]">
       <aside className="border-b border-line md:sticky md:top-0 md:h-dvh md:border-b-0 md:border-r">
         <div className="flex items-center justify-between px-5 py-4 md:block md:py-6">
           <Link href="/admin" className="font-display text-xl tracking-wide">EDITORWALABHAIYA</Link>
